@@ -1,22 +1,61 @@
 #include <dirent.h>
 #include <fcntl.h>
 #include <fnmatch.h>
+#include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
 #include <wait.h>
 
+#include "bits/getopt_core.h"
 #include "config.h"
 
+
 /* file_path: lenght must equal path_lenght. */
-void get_last_modify_file(const char *dir_path, const uint8_t level,
-                          char *file_path, time_t *file_mtime);
-void totemp_file(char *temp_path, const char *template_path);
-void pre_send(const char *path);
-static void send();
+static void apply_pre_send_actions(const char *path);
+static void get_last_modify_file(const char *dir_path, const uint8_t level,
+                                 char *file_path, time_t *file_mtime);
+static void status();
+static void submit();
+static void totemp_file(char *temp_path, const char *template_path);
+
+void apply_pre_send_actions(const char *path)
+{
+	int status;
+	uint8_t i = 0;
+	const char **p;
+	
+	for(p = pre_send_actions; *p;) {
+		for(i = 0; p[i] != NULL; ++i) {
+			if(strcmp(p[i], "path") == 0){
+				p[i] = path;
+			}
+		}
+
+		switch(fork()){
+		case -1:
+			perror("fork");
+			exit(EXIT_FAILURE);
+
+		case 0:
+			execvp(*p, (char *const *)p);
+			perror("execvp");
+			_exit(EXIT_FAILURE);
+		}
+
+		wait(&status);
+		if(WIFEXITED(status) == 0 || WEXITSTATUS(status) != 0){
+			fprintf(stderr, "Action %s failed\n", *p);
+			exit(EXIT_FAILURE);
+		}
+
+		p += i + 1;
+	}
+}
 
 void
 get_last_modify_file(const char *dir_path, const uint8_t level,
@@ -69,6 +108,23 @@ get_last_modify_file(const char *dir_path, const uint8_t level,
 	}
 }
 
+void submit()
+{
+	time_t file_mtime = 0;
+	char file_path[path_lenght], temp_path[] = "/tmp/tmp.XXXXXX";
+
+	get_last_modify_file((char *)start_dir, 0, file_path, &file_mtime);
+	totemp_file(temp_path, file_path);
+	apply_pre_send_actions(temp_path);
+	
+	unlink(temp_path);
+}
+
+void status()
+{
+	printf("Status\n");
+}
+
 void totemp_file(char *temp_path, const char *template_path)
 {
 	char buf[32];
@@ -97,44 +153,33 @@ void totemp_file(char *temp_path, const char *template_path)
 	close(fd_r);
 }
 
-void pre_send(const char *path)
-{
-	int status;
-	const char *const *p;
-	
-	for(p = pre_send_actions; *p;){
-		switch(fork()){
-		case 0:
-			execvp(*p, (char *const *)p);
-			break;
-		case -1:
-			// TODO: Fail.
-			break;
-		}
-		wait(&status);
-		// TODO: Check status.
-
-		while(*p++);
-	}
-}
-
-void send()
-{
-	time_t file_mtime = 0;
-	char file_path[path_lenght];
-
-	get_last_modify_file((char *)start_dir, 0, file_path, &file_mtime);
-	totemp_file(temp_path, file_path);
-	pre_send(temp_path);
-	
-	printf("%s", temp_path);
-	unlink(temp_path);
-}
-
 int
 main(int argc, char *argv[])
 {
-	send();
+	char *command = NULL;
+	int let;
+
+	while ((let = getopt(argc, argv, "c:hv")) != -1) {
+		switch (let){
+		case 'c':
+			command = optarg;
+			break;
+		// TODO: Move printf + exit to function.
+		case 'v':
+			printf("%s 1.0\n", argv[0]);// TODO: Version.
+			exit(1);
+		default:
+			printf("Usage: %s [-v] [-c send(default)/status]\n", argv[0]);
+			exit(1);
+		}
+	}
+
+	if (argc == 1 || strcmp(command, "send") == 0) {
+		submit();
+	}
+	else if (strcmp(command, "status") == 0) {
+		status();
+	}
 
 	return 0;
 }
