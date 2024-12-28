@@ -11,7 +11,6 @@
 #include <unistd.h>
 #include <wait.h>
 
-#include "bits/getopt_core.h"
 #include "config.h"
 
 
