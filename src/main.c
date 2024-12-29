@@ -12,17 +12,18 @@
 #include <wait.h>
 
 #include "config.h"
+#include "networking.h"
 
 
 /* file_path: lenght must equal path_lenght. */
-static void apply_pre_send_actions(const char *path);
+static int apply_pre_send_actions(const char *path);
 static void get_last_modify_file(const char *dir_path, const uint8_t level,
                                  char *file_path, time_t *file_mtime);
 static void status();
 static void submit();
 static void totemp_file(char *temp_path, const char *template_path);
 
-void apply_pre_send_actions(const char *path)
+int apply_pre_send_actions(const char *path)
 {
 	int status;
 	uint8_t i = 0;
@@ -38,7 +39,7 @@ void apply_pre_send_actions(const char *path)
 		switch(fork()){
 		case -1:
 			perror("fork");
-			exit(EXIT_FAILURE);
+			return 1;
 
 		case 0:
 			execvp(*p, (char *const *)p);
@@ -49,11 +50,13 @@ void apply_pre_send_actions(const char *path)
 		wait(&status);
 		if(WIFEXITED(status) == 0 || WEXITSTATUS(status) != 0){
 			fprintf(stderr, "Action %s failed\n", *p);
-			exit(EXIT_FAILURE);
+			return 1;
 		}
 
 		p += i + 1;
 	}
+
+	return 0;
 }
 
 void
@@ -114,9 +117,19 @@ void submit()
 
 	get_last_modify_file((char *)start_dir, 0, file_path, &file_mtime);
 	totemp_file(temp_path, file_path);
-	apply_pre_send_actions(temp_path);
-	
+	if(apply_pre_send_actions(temp_path)) {
+		goto cleanup;
+	}
+	if(nsend_task(temp_path)){
+		goto cleanup;
+	}
+
 	unlink(temp_path);
+	return;
+	
+cleanup:
+	unlink(temp_path);
+	exit(1);
 }
 
 void status()
@@ -155,29 +168,28 @@ void totemp_file(char *temp_path, const char *template_path)
 int
 main(int argc, char *argv[])
 {
-	char *command = NULL;
 	int let;
 
-	while ((let = getopt(argc, argv, "c:hv")) != -1) {
-		switch (let){
-		case 'c':
-			command = optarg;
-			break;
-		// TODO: Move printf + exit to function.
-		case 'v':
-			printf("%s 1.0\n", argv[0]);// TODO: Version.
-			exit(1);
-		default:
-			printf("Usage: %s [-v] [-c send(default)/status]\n", argv[0]);
-			exit(1);
-		}
-	}
-
-	if (argc == 1 || strcmp(command, "send") == 0) {
+	if (argc == 1) {
 		submit();
 	}
-	else if (strcmp(command, "status") == 0) {
-		status();
+	else {
+		while ((let = getopt(argc, argv, "shv")) != -1) {
+			switch (let){
+			case 's':
+				status();
+				break;
+			
+			// TODO: Move printf + exit to function.
+			case 'v':
+				printf("%s 1.0\n", argv[0]);// TODO: Version.
+				exit(1);
+			
+			default:
+				printf("Usage: %s [-v] [-s]\n", argv[0]);
+				exit(1);
+			}
+		}
 	}
 
 	return 0;

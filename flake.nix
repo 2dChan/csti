@@ -25,18 +25,12 @@
             packages = with pkgs.${system}; [
               gcc
               gdb
-              libclang
-							astyle
+							gnumake
               
               (writeShellScriptBin "r" ''
-                gcc "$1" -o file
-                shift
-                ./file "$@" 
-                rm -rf file
+                make
+                ./build/csti "$@" 
               '')
-              (writeShellScriptBin "fmt" ''
-								astyle -A3 -t8 -p -xg -H -j -xB
-							'')
             ];
           };
       });
