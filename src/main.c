@@ -14,7 +14,6 @@
 #include "config.h"
 #include "networking.h"
 
-
 /* file_path: lenght must equal path_lenght. */
 static int apply_pre_send_actions(const char *path);
 static void get_last_modify_file(const char *dir_path, const uint8_t level,
@@ -182,7 +181,7 @@ main(int argc, char *argv[])
 			
 			// TODO: Move printf + exit to function.
 			case 'v':
-				printf("%s 1.0\n", argv[0]);// TODO: Version.
+				printf("%s %s\n", argv[0], VERSION);
 				exit(1);
 			
 			default:

@@ -22,7 +22,7 @@ $(EXEC): $(OBJS)
 ${OBJS}: config.h config.mk
 
 config.h:
-	cp $(SRC_DIR)/config.def.h $(SRC_DIR)/$@
+	cp -n $(SRC_DIR)/config.def.h $(SRC_DIR)/$@
 
 clean:
 	rm -rf $(BUILD_DIR) $(EXEC) $(SRC_DIR)/config.h
