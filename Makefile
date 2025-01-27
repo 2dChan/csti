@@ -14,10 +14,10 @@ $(BUILD_DIR):
 	mkdir -p $@
 
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
-	$(CC) -c ${CFLAGS} $< -o $@
+	$(CC) -c ${CFLAGS} $< -o $@ ${LDFLAGS}
 
 $(EXEC): $(OBJS)
-	$(CC) -o $(BUILD_DIR)/$@ $(OBJS)
+	$(CC) -o $(BUILD_DIR)/$@ $(OBJS) ${LDFLAGS}
 
 ${OBJS}: config.h config.mk
 
