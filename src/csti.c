@@ -144,6 +144,11 @@ submit()
 	totemp_file(temp_path, file_path);
 	if (apply_pre_send_actions(temp_path))
 		goto failure_exit;
+
+	printf("- File path:%s\n- Temp_path:%s\n- Header:%s\nReady to network send.\n",
+	    file_path, temp_path, header);
+	fflush(stdout);
+
 	if (nsend_task(temp_path))
 		goto failure_exit;
 
@@ -161,8 +166,8 @@ void
 totemp_file(char *temp_path, const char *template_path)
 {
 	char buf[BUF_SIZE];
+	ssize_t lenght;
 	int fd_w, fd_r;
-	int8_t lenght;
 
 	fd_r = open(template_path, O_RDWR);
 	if (fd_r == -1) {
