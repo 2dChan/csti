@@ -18,11 +18,11 @@
 #define HEADER_SIZE 10
 #define BUF_SIZE 1024
 
-static int  apply_pre_send_actions(const char *);
-static char *get_file_header(const char *);
-static void get_last_modify_file(const char *, char *, time_t *);
-static void submit();
-static void totemp_file(char *, const char *);
+static int     apply_pre_send_actions(const char *);
+static char    *get_file_header(const char *);
+static void    get_last_modify_file(const char *, char *, time_t *);
+static void    submit();
+static void    totemp_file(char *, const char *);
 
 int 
 apply_pre_send_actions(const char *path)
@@ -144,11 +144,6 @@ submit()
 	totemp_file(temp_path, file_path);
 	if (apply_pre_send_actions(temp_path))
 		goto failure_exit;
-
-	printf("- File path:%s\n- Temp_path:%s\n- Header:%s\nReady to network send.\n",
-	    file_path, temp_path, header);
-	fflush(stdout);
-
 	if (nsend_task(temp_path))
 		goto failure_exit;
 
@@ -202,7 +197,6 @@ main(int argc, char *argv[])
 	else {
 		while ((let = getopt(argc, argv, "hv")) != -1) {
 			switch (let) {
-			// TODO: Move printf + exit to function.
 			case 'v':
 				printf("%s %s\n", argv[0], VERSION);
 				exit(1);
