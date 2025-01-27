@@ -26,8 +26,7 @@
               gcc
               gdb
               gnumake
-
-              curlHTTP3
+              libressl
               
               clang-tools
               
@@ -37,6 +36,7 @@
               '')
             ];
           };
+          LD_LIBRARY_PATH = nixpkgs.lib.makeLibraryPath [pkgs.libressl.cc.cc.lib];
       });
     };
 }
