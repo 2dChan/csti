@@ -121,12 +121,12 @@ submit_run(const char *login, const char *password, const char *path,
 	data_template[] = 
 		"action=submit-run&json=1&SID=%s&EJSID=%s&prob_id=%s&lang_id=%s&file=";
 
-	int fd, is_ok;
-	ssize_t lenght;
+	char sid[SID_LENGHT], ejsid[SID_LENGHT], *contest_id, *prob_id, lang_id[] = "2";
+	char *request, buffer[BUFFER_SIZE], message[MESSAGE_LENGHT];
 	struct stat fstat;
 	struct tls *ctx;
-	char *request, buffer[BUFFER_SIZE], message[MESSAGE_LENGHT];
-	char sid[SID_LENGHT], ejsid[SID_LENGHT], *contest_id, *prob_id, lang_id[] = "2";
+	ssize_t lenght;
+	int fd, is_ok;
 
 	ctx = connect();
 	if (ctx == NULL)
