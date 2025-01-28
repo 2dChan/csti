@@ -67,7 +67,7 @@ char *
 get_file_header(const char *file_path)
 {
 	FILE *file;
-	char *header, *ptr;
+	char *header;
 
 	file = fopen(file_path, "r");
 	if (file == NULL) {
