@@ -2,12 +2,12 @@
 
 #include <sys/stat.h>
 
+#include <ctype.h>
 #include <stdio.h>
 #include <string.h>
 #include <fcntl.h>
 #include <unistd.h>
 
-#include "config.h"
 #include "networking.h"
 #include "util.h"
 
@@ -18,12 +18,14 @@
 #define AUTH_DATA_LENGHT 53
 #define SEND_DATA_LENGHT 61
 
-static int           auth(struct tls *, char *, char *, char *);
+static int           auth(struct tls *, const char *, const char *,
+                          const char *, char *, char *);
 static struct tls    *connect(void);
 static void          unpack_header(char *, char **, char **);
 
 int 
-auth(struct tls *ctx, char *contest_id, char *sid, char *ejsid)
+auth(struct tls *ctx, const char *login, const char *password,
+     const char *contest_id, char *sid, char *ejsid)
 {
 	static const char trequest[] = 
 	    "POST /cgi-bin/new-client HTTP/1.1\r\n"
@@ -32,14 +34,14 @@ auth(struct tls *ctx, char *contest_id, char *sid, char *ejsid)
 	    "Content-Type: application/x-www-form-urlencoded\r\n"
 	    "Content-Length: %ld\r\n"
 	    "\r\n"
-	    "action=login-json&contest_id=%s&login=%s&password=%s&json=1";
+	    "action=login-json&login=%s&password=%s&contest_id=%s&json=1";
 
 	char buffer[BUFFER_SIZE], message[MESSAGE_LENGHT];
 	ssize_t lenght;
 	int is_ok;
 
 	lenght = AUTH_DATA_LENGHT + strlen(login) + strlen(password) + strlen(contest_id);
-	snprintf(buffer, sizeof(buffer), trequest, lenght, contest_id, login, password);
+	snprintf(buffer, sizeof(buffer), trequest, lenght, login, password, contest_id);
 	if (safe_tls_write(ctx, buffer, strlen(buffer)) == -1)
 		return 1;
 
@@ -68,21 +70,23 @@ auth(struct tls *ctx, char *contest_id, char *sid, char *ejsid)
 void
 unpack_header(char *header, char **contest_id, char **prob_id)
 {
-	*contest_id = strchr(header, ' ');
-	if (*contest_id == NULL) {
-		goto failure;
-	}
-	*contest_id += 1;
-	*prob_id = strchr(*contest_id, '-');
-	if (*prob_id == NULL) {
-		goto failure;
-	}
-	**prob_id = 0;
-	*prob_id += 1;
-	return;
+	char *ptr;
 
-failure:
-	fprintf(stderr, "unpack_header: Header presentation error\n");
+	*contest_id = NULL, *prob_id = NULL;
+	for (ptr = header; *ptr != 0; ++ptr) {
+		if (isspace(*ptr) || *ptr == '-') {
+			*ptr = 0;
+			if (*contest_id == NULL) {
+				*contest_id = ptr + 1;
+			}
+			else if (*prob_id == NULL) {
+				*prob_id = ptr + 1;
+			}
+			else {
+				break;
+			}
+		}
+	}
 }
 
 struct tls *
@@ -107,7 +111,8 @@ connect(void)
 
 
 int 
-nsubmit_run(const char *path, char *header) 
+nsubmit_run(const char *login, const char *password, const char *path, 
+            char *header) 
 {
 	static const char trequest[] = 
 		"POST /cgi-bin/new-client HTTP/1.1\r\n"
@@ -130,10 +135,12 @@ nsubmit_run(const char *path, char *header)
 		return 1;
 
 	unpack_header(header, &contest_id, &prob_id);
-	if (contest_id == NULL || prob_id == NULL) 
+	if (contest_id == NULL || prob_id == NULL) {
+		fprintf(stderr, "unpack_header: Header presentation error\n");
 		return 1;
+	}
 	
-	if (auth(ctx, contest_id, sid, ejsid))
+	if (auth(ctx, login, password, contest_id, sid, ejsid))
 		goto failure;
 
 	if (stat(path, &fstat) == -1)

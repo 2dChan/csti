@@ -1,1 +1,1 @@
-int nsubmit_run(const char *, char *);
+int nsubmit_run(const char *, const char *, const char *, char *);

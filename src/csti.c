@@ -83,10 +83,6 @@ get_file_header(const char *file_path)
 		return NULL;
 	}
 
-	ptr = header;
-	while ((ptr = strchr(header, '\n')) != NULL)
-		*ptr = 0;
-
 	return header;
 }
 
@@ -141,6 +137,11 @@ submit()
 	time_t file_mtime = 0;
 
 	get_last_modify_file(start_dir, file_path, &file_mtime);
+	if (file_mtime == 0){
+		fprintf(stderr, "get_last_modify_file: Can't find file\n");
+		exit(EXIT_FAILURE);
+	}
+
 	header = get_file_header(file_path);
 	if (header == NULL) 
 		exit(EXIT_FAILURE);
@@ -148,7 +149,7 @@ submit()
 	totemp_file(temp_path, file_path);
 	if (apply_pre_send_actions(temp_path))
 		goto failure_exit;
-	if (nsubmit_run(temp_path, header))
+	if (nsubmit_run(login, password, temp_path, header))
 		goto failure_exit;
 
 	free(header);
