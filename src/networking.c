@@ -7,6 +7,7 @@
 
 #include <ctype.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -18,8 +19,6 @@
 #define BUFFER_SIZE 1024
 #define SID_LENGHT 17
 #define MESSAGE_LENGHT 100
-#define AUTH_DATA_LENGHT 53
-#define SEND_DATA_LENGHT 61
 
 static int           auth(struct tls *, const char *, const char *,
                           const char *, char *, char *);
@@ -30,23 +29,25 @@ int
 auth(struct tls *ctx, const char *login, const char *password,
      const char *contest_id, char *sid, char *ejsid)
 {
-	static const char trequest[] = 
-	    "POST /cgi-bin/new-client HTTP/1.1\r\n"
-	    "Host: " HOST "\r\n"
-	    "Conncetion: keep-alive\r\n"
-	    "Content-Type: application/x-www-form-urlencoded\r\n"
-	    "Content-Length: %ld\r\n"
-	    "\r\n"
-	    "action=login-json&login=%s&password=%s&contest_id=%s&json=1";
+	static const char content_type[] = "application/x-www-form-urlencoded",
+	data_template[] = 
+		"action=login-json&login=%s&password=%s&contest_id=%s&json=1";
 
-	char buffer[BUFFER_SIZE], message[MESSAGE_LENGHT];
-	ssize_t lenght;
+	char buffer[BUFFER_SIZE], message[MESSAGE_LENGHT], *request;
+	ssize_t lenght = 0;
 	int is_ok;
 
-	lenght = AUTH_DATA_LENGHT + strlen(login) + strlen(password) + strlen(contest_id);
-	snprintf(buffer, sizeof(buffer), trequest, lenght, login, password, contest_id);
-	if (safe_tls_write(ctx, buffer, strlen(buffer)) == -1)
+	request = make_post_request(HOST, content_type, 0, data_template, login, 
+	                            password, contest_id);
+	if (request == NULL)
 		return 1;
+
+	if (safe_tls_write(ctx, request, strlen(request)) == -1) {
+		free(request);
+		return 1;
+	}
+
+	free(request);
 
 	lenght = safe_tls_read(ctx, buffer, sizeof(buffer) - 1);
 	if (lenght == -1) 
@@ -116,21 +117,16 @@ int
 submit_run(const char *login, const char *password, const char *path, 
             char *header) 
 {
-	static const char trequest[] = 
-		"POST /cgi-bin/new-client HTTP/1.1\r\n"
-	    "Host: " HOST "\r\n"
-		"Content-Type: multipart/form-data\r\n"
-	    "Content-Length: %ld\r\n"
-		"Conncetion: close\r\n\r\n"
-		"action=submit-run&SID=%s&EJSID=%s&prob_id=%s&lang_id=%s&json=1&file=";
+	static const char content_type[] = "multipart/form-data",
+	data_template[] = 
+		"action=submit-run&json=1&SID=%s&EJSID=%s&prob_id=%s&lang_id=%s&file=";
 
-	struct tls *ctx;
-	char sid[SID_LENGHT], ejsid[SID_LENGHT], *contest_id, *prob_id, lang_id[] = "2";
-
-	char buffer[BUFFER_SIZE], message[MESSAGE_LENGHT];
+	int fd, is_ok;
 	ssize_t lenght;
 	struct stat fstat;
-	int fd, is_ok;
+	struct tls *ctx;
+	char *request, buffer[BUFFER_SIZE], message[MESSAGE_LENGHT];
+	char sid[SID_LENGHT], ejsid[SID_LENGHT], *contest_id, *prob_id, lang_id[] = "2";
 
 	ctx = connect();
 	if (ctx == NULL)
@@ -147,13 +143,18 @@ submit_run(const char *login, const char *password, const char *path,
 
 	if (stat(path, &fstat) == -1)
 		goto failure;
-	
-	lenght = SEND_DATA_LENGHT + strlen(sid) + strlen(ejsid) + strlen(prob_id) +
-		strlen(lang_id);
-	snprintf(buffer, BUFFER_SIZE, trequest, lenght, sid, ejsid, prob_id, lang_id);
 
-	if (safe_tls_write(ctx, buffer, strlen(buffer)) == -1)
+	request = make_post_request(HOST, "multipart/form-data", fstat.st_size, 
+	                            data_template, sid, ejsid, prob_id, lang_id);
+	if(request == NULL)
 		goto failure;
+
+	if (safe_tls_write(ctx, request, strlen(request)) == -1) {
+		free(request);
+		goto failure;
+	}
+
+	free(request);
 
 	fd = open(path, O_RDONLY);
 	if (fd == -1) {
@@ -173,7 +174,8 @@ submit_run(const char *login, const char *password, const char *path,
 		goto failure;
 	buffer[lenght] = 0;
 
-	unparse_json_field(buffer, "ok", BOOL, &is_ok);
+	if (unparse_json_field(buffer, "ok", BOOL, &is_ok))
+		goto failure;
 	if (is_ok == 0) {
 		if (unparse_json_field(buffer, "message", STRING, &message))
 			return 1;
