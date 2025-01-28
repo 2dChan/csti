@@ -112,9 +112,8 @@ connect(void)
 	return ctx;
 }
 
-
 int 
-nsubmit_run(const char *login, const char *password, const char *path, 
+submit_run(const char *login, const char *password, const char *path, 
             char *header) 
 {
 	static const char trequest[] = 

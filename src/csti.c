@@ -152,7 +152,7 @@ submit()
 	totemp_file(temp_path, file_path);
 	if (apply_pre_send_actions(temp_path))
 		goto failure_exit;
-	if (nsubmit_run(login, password, temp_path, header))
+	if (submit_run(login, password, temp_path, header))
 		goto failure_exit;
 
 	free(header);
@@ -208,7 +208,6 @@ main(int argc, char *argv[])
 			case 'v':
 				printf("%s %s\n", argv[0], VERSION);
 				exit(1);
-			
 			default:
 				printf("Usage: %s [-v]\n", argv[0]);
 				exit(1);
