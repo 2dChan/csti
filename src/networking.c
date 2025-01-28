@@ -48,7 +48,7 @@ auth(struct tls *ctx, const char *login, const char *password,
 	if (safe_tls_write(ctx, buffer, strlen(buffer)) == -1)
 		return 1;
 
-	lenght = safe_tls_read(ctx, buffer, sizeof(buffer));
+	lenght = safe_tls_read(ctx, buffer, sizeof(buffer) - 1);
 	if (lenght == -1) 
 		return 1;
 	buffer[lenght] = 0;
@@ -125,7 +125,7 @@ submit_run(const char *login, const char *password, const char *path,
 		"action=submit-run&SID=%s&EJSID=%s&prob_id=%s&lang_id=%s&json=1&file=";
 
 	struct tls *ctx;
-	char sid[SID_LENGHT], ejsid[SID_LENGHT], *contest_id, *prob_id, lang_id[] = "1";
+	char sid[SID_LENGHT], ejsid[SID_LENGHT], *contest_id, *prob_id, lang_id[] = "2";
 
 	char buffer[BUFFER_SIZE], message[MESSAGE_LENGHT];
 	ssize_t lenght;
@@ -168,7 +168,7 @@ submit_run(const char *login, const char *password, const char *path,
 	}
 	close(fd);
 
-	lenght = safe_tls_read(ctx, buffer, sizeof(buffer));
+	lenght = safe_tls_read(ctx, buffer, sizeof(buffer) - 1);
 	if (lenght == -1)
 		goto failure;
 	buffer[lenght] = 0;
