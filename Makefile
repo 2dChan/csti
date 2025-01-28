@@ -26,3 +26,10 @@ config.h:
 
 clean:
 	rm -rf $(BUILD_DIR) $(EXEC) $(SRC_DIR)/config.h
+
+install: $(EXEC)
+	mkdir -p $(DESTDIR)$(PREFIX)/bin
+	cp -f $(BUILD_DIR)/$(EXEC) $(DESTDIR)${PREFIX}/bin
+	chmod 755 $(DESTDIR)$(PREFIX)/bin/$(EXEC)
+uninstall:
+	rm -f $(DESTDIR)$(PREFIX)/bin/$(EXEC)
