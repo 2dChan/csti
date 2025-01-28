@@ -1,56 +1,88 @@
-#include <ctype.h>
+#include <tls.h>
+
+#include <sys/stat.h>
+
 #include <stdio.h>
 #include <string.h>
-#include <sys/stat.h>
-#include <tls.h>
-#include <poll.h>
 #include <fcntl.h>
 #include <unistd.h>
-
 
 #include "config.h"
 #include "networking.h"
 #include "util.h"
 
-enum {
-	AUTH_REQUEST_DATA_LENGHT=46,
-	SEND_REQUEST_DATA_LENGHT=61,
-	BUFFER_SIZE=1024,
-	SID_LENGHT=17,
-	ID_MAX_LEN=5,
-};
+#define HOST "unicorn.ejudge.ru"
+#define BUFFER_SIZE 1024
+#define SID_LENGHT 17
+#define MESSAGE_LENGHT 100
+#define AUTH_DATA_LENGHT 53
+#define SEND_DATA_LENGHT 61
 
-static const char host[] = "unicorn.ejudge.ru";
+static int           auth(struct tls *, char *, char *, char *);
+static struct tls    *connect(void);
+static void          unpack_header(char *, char **, char **);
 
-static void auth(struct tls *ctx, char *contest_id, char *sid, char *ejsid);
-static struct tls *connect(void);
-
-void 
+int 
 auth(struct tls *ctx, char *contest_id, char *sid, char *ejsid)
 {
-	/* TODO: Error handle */
 	static const char trequest[] = 
 	    "POST /cgi-bin/new-client HTTP/1.1\r\n"
-	    "Host: %s\r\n"
+	    "Host: " HOST "\r\n"
 	    "Conncetion: keep-alive\r\n"
 	    "Content-Type: application/x-www-form-urlencoded\r\n"
 	    "Content-Length: %ld\r\n"
 	    "\r\n"
-	    "action=login-json&login=%s&password=%s&contest_id=%s";
-	char buffer[BUFFER_SIZE];
-	ssize_t data_lenght;
+	    "action=login-json&contest_id=%s&login=%s&password=%s&json=1";
 
-	data_lenght = AUTH_REQUEST_DATA_LENGHT + strlen(login) +
-		          strlen(password) + strlen(contest_id);
-	snprintf(buffer, sizeof(buffer), trequest, host,
-	         data_lenght, login, password, contest_id);
+	char buffer[BUFFER_SIZE], message[MESSAGE_LENGHT];
+	ssize_t lenght;
+	int is_ok;
 
-	safe_tls_write(ctx, buffer, strlen(buffer));
-	bzero(buffer, sizeof(buffer));
-	safe_tls_read(ctx, buffer, sizeof(buffer));
+	lenght = AUTH_DATA_LENGHT + strlen(login) + strlen(password) + strlen(contest_id);
+	snprintf(buffer, sizeof(buffer), trequest, lenght, contest_id, login, password);
+	if (safe_tls_write(ctx, buffer, strlen(buffer)) == -1)
+		return 1;
+
+	lenght = safe_tls_read(ctx, buffer, sizeof(buffer));
+	if (lenght == -1) 
+		return 1;
+	buffer[lenght] = 0;
+
+	if (unparse_json_field(buffer, "ok", BOOL, &is_ok))
+		return 1;
+
+	if (is_ok == 0) {
+		if (unparse_json_field(buffer, "message", STRING, &message))
+			return 1;
+		fprintf(stderr, "ejudge error: %s\n", message);
+		return 1;
+	}
+
+	if (unparse_json_field(buffer, "SID", STRING, sid) ||
+       unparse_json_field(buffer, "EJSID", STRING, ejsid))
+		return 1;
 	
-	unparse_json_field(buffer, "SID", sid, SID_LENGHT - 1);
-	unparse_json_field(buffer, "EJSID", ejsid, SID_LENGHT - 1);
+	return 0;
+}
+
+void
+unpack_header(char *header, char **contest_id, char **prob_id)
+{
+	*contest_id = strchr(header, ' ');
+	if (*contest_id == NULL) {
+		goto failure;
+	}
+	*contest_id += 1;
+	*prob_id = strchr(*contest_id, '-');
+	if (*prob_id == NULL) {
+		goto failure;
+	}
+	**prob_id = 0;
+	*prob_id += 1;
+	return;
+
+failure:
+	fprintf(stderr, "unpack_header: Header presentation error\n");
 }
 
 struct tls *
@@ -61,95 +93,95 @@ connect(void)
 	 * 1) Error handle.
 	 * 2) Setup config.
 	 */
+
 	struct tls_config *config;
     struct tls *ctx;
 
     config = tls_config_new();
 	ctx = tls_client();
     tls_configure(ctx, config);
-	tls_connect(ctx, host, "443");
+	tls_connect(ctx, HOST, "443");
 
 	return ctx;
 }
 
 
 int 
-nsend_task(char *path) 
+nsubmit_run(const char *path, char *header) 
 {
-	char contest_id[ID_MAX_LEN], prob_id[ID_MAX_LEN], lang_id[] = "1";
-	FILE* file = fopen(path, "r");
-	char *ptr;
-	int flag = 1;
-	while(flag != 0) {
-		int let = fgetc(file);
-		switch (let) {
-		case '/':
-		case ' ':
-			ptr = contest_id;
-			continue;
-		case '-':
-			ptr = 0;
-			fscanf(file, "%s", prob_id);
-			flag = 0;
-			break;
-		default:
-			*ptr = let;
-			ptr++;
-		}
-	}
-	fclose(file);
-	/* TODO: Error handle */
-
-	const char request[] = 
+	static const char trequest[] = 
 		"POST /cgi-bin/new-client HTTP/1.1\r\n"
-		"Host: unicorn.ejudge.ru\r\n"
+	    "Host: " HOST "\r\n"
 		"Content-Type: multipart/form-data\r\n"
 	    "Content-Length: %ld\r\n"
 		"Conncetion: close\r\n\r\n"
 		"action=submit-run&SID=%s&EJSID=%s&prob_id=%s&lang_id=%s&json=1&file=";
-	char buffer[BUFFER_SIZE] = { 0 }, sid[SID_LENGHT], ejsid[SID_LENGHT];
-	ssize_t lenght;
-	int fd;
-	struct stat fstat;
+
 	struct tls *ctx;
+	char sid[SID_LENGHT], ejsid[SID_LENGHT], *contest_id, *prob_id, lang_id[] = "1";
+
+	char buffer[BUFFER_SIZE], message[MESSAGE_LENGHT];
+	ssize_t lenght;
+	struct stat fstat;
+	int fd, is_ok;
 
 	ctx = connect();
-	auth(ctx, contest_id, sid, ejsid);
+	if (ctx == NULL)
+		return 1;
+
+	unpack_header(header, &contest_id, &prob_id);
+	if (contest_id == NULL || prob_id == NULL) 
+		return 1;
 	
-	if (stat(path, &fstat) == -1){
+	if (auth(ctx, contest_id, sid, ejsid))
+		goto failure;
+
+	if (stat(path, &fstat) == -1)
+		goto failure;
+	
+	lenght = SEND_DATA_LENGHT + strlen(sid) + strlen(ejsid) + strlen(prob_id) +
+		strlen(lang_id);
+	snprintf(buffer, BUFFER_SIZE, trequest, lenght, sid, ejsid, prob_id, lang_id);
+
+	if (safe_tls_write(ctx, buffer, strlen(buffer)) == -1)
+		goto failure;
+
+	fd = open(path, O_RDONLY);
+	if (fd == -1) {
+		perror("open");
 		goto failure;
 	}
-	lenght = SEND_REQUEST_DATA_LENGHT + strlen(sid) +
-	    strlen(ejsid) + strlen(prob_id) + strlen(lang_id);
-	snprintf(buffer, BUFFER_SIZE, request, lenght, sid, ejsid, prob_id, lang_id);
-	printf("%s\n", buffer);
-	fflush(stdout);
-	safe_tls_write(ctx, buffer, strlen(buffer));
-	fd = open(path, O_RDONLY);
-	while((lenght = read(fd, buffer, sizeof(buffer))) != 0) {
-		safe_tls_write(ctx, buffer, lenght);
-		bzero(buffer, sizeof(buffer));
+
+	while ((lenght = read(fd, buffer, sizeof(buffer))) != 0) {
+		buffer[lenght] = 0;
+		if (safe_tls_write(ctx, buffer, lenght) == -1)
+			goto failure;
 	}
 	close(fd);
-	printf("%s\n", buffer);
-	fflush(stdout);
 
-	safe_tls_read(ctx, buffer, sizeof(buffer));
-	printf("%s\n", buffer);
-	
+	lenght = safe_tls_read(ctx, buffer, sizeof(buffer));
+	if (lenght == -1)
+		goto failure;
+	buffer[lenght] = 0;
+
+	unparse_json_field(buffer, "ok", BOOL, &is_ok);
+	if (is_ok == 0) {
+		if (unparse_json_field(buffer, "message", STRING, &message))
+			return 1;
+		fprintf(stderr, "ejudge error: %s\n", message);
+		return 1;
+	}
+
+	/* TODO: Unwrap request. */
+	puts(buffer);
+
     tls_close(ctx);
-    tls_free(ctx);
+	tls_free(ctx);
 	return 0;
+
 failure:
 	tls_close(ctx);
-    tls_free(ctx);
+	tls_free(ctx);
 	return 1;
-}
-
-int 
-nget_task_status(char *path) 
-{
-	
-	return 0;
 }
 

@@ -50,7 +50,7 @@ apply_pre_send_actions(const char *path)
 
 		wait(&status);
 		if (WIFEXITED(status) == 0 || WEXITSTATUS(status) != 0) {
-			fprintf(stderr, "Action %s failed.\n", *p);
+			fprintf(stderr, "apply_pre_send_action: Action %s failed\n", *p);
 			return 1;
 		}
 
@@ -64,7 +64,7 @@ char *
 get_file_header(const char *file_path)
 {
 	FILE *file;
-	char *header;
+	char *header, *ptr;
 
 	file = fopen(file_path, "r");
 	if (file == NULL) {
@@ -82,6 +82,10 @@ get_file_header(const char *file_path)
 		perror("fgets");
 		return NULL;
 	}
+
+	ptr = header;
+	while ((ptr = strchr(header, '\n')) != NULL)
+		*ptr = 0;
 
 	return header;
 }
@@ -144,7 +148,7 @@ submit()
 	totemp_file(temp_path, file_path);
 	if (apply_pre_send_actions(temp_path))
 		goto failure_exit;
-	if (nsend_task(temp_path))
+	if (nsubmit_run(temp_path, header))
 		goto failure_exit;
 
 	free(header);
