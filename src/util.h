@@ -1,3 +1,6 @@
+/* 
+ * See LICENSE file for copyright and license details. 
+ */
 #include <stdio.h>
 
 enum type {
