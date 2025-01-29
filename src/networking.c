@@ -41,29 +41,24 @@ auth(struct tls *ctx, const char *login, const char *password,
 	                            password, contest_id);
 	if (request == NULL)
 		return 1;
-
-	if (safe_tls_write(ctx, request, strlen(request)) == -1) {
+	if (tls_safe_write(ctx, request, strlen(request)) == -1) {
 		free(request);
 		return 1;
 	}
-
 	free(request);
 
-	lenght = safe_tls_read(ctx, buffer, sizeof(buffer) - 1);
+	lenght = tls_safe_read(ctx, buffer, sizeof(buffer) - 1);
 	if (lenght == -1) 
 		return 1;
 	buffer[lenght] = 0;
-
 	if (unparse_json_field(buffer, "ok", BOOL, &is_ok))
 		return 1;
-
 	if (is_ok == 0) {
 		if (unparse_json_field(buffer, "message", STRING, &message))
 			return 1;
 		fprintf(stderr, "ejudge error: %s\n", message);
 		return 1;
 	}
-
 	if (unparse_json_field(buffer, "SID", STRING, sid) ||
        unparse_json_field(buffer, "EJSID", STRING, ejsid))
 		return 1;
@@ -103,9 +98,9 @@ connect(void)
 	 */
 
 	struct tls_config *config;
-    struct tls *ctx;
+	struct tls *ctx;
 
-    config = tls_config_new();
+	config = tls_config_new();
 	ctx = tls_client();
     tls_configure(ctx, config);
 	tls_connect(ctx, HOST, "443");
@@ -131,9 +126,6 @@ submit_run(const char *login, const char *password, const char *path,
 	ssize_t lenght;
 	int fd, is_ok;
 
-	ctx = connect();
-	if (ctx == NULL)
-		return 1;
 
 	unpack_header(header, &contest_id, &prob_id);
 	if (contest_id == NULL || prob_id == NULL) {
@@ -141,18 +133,22 @@ submit_run(const char *login, const char *password, const char *path,
 		return 1;
 	}
 	
+	/* Connect. */
+	ctx = connect();
+	if (ctx == NULL)
+		return 1;
 	if (auth(ctx, login, password, contest_id, sid, ejsid))
 		goto failure;
 
+	/* Send. */
 	if (stat(path, &fstat) == -1)
 		goto failure;
-
 	request = make_post_request(HOST, "multipart/form-data", fstat.st_size, 
 	                            data_template, sid, ejsid, prob_id, lang_id);
 	if(request == NULL)
 		goto failure;
 
-	if (safe_tls_write(ctx, request, strlen(request)) == -1) {
+	if (tls_safe_write(ctx, request, strlen(request)) == -1) {
 		free(request);
 		goto failure;
 	}
@@ -166,13 +162,16 @@ submit_run(const char *login, const char *password, const char *path,
 	}
 
 	while ((lenght = read(fd, buffer, sizeof(buffer))) != 0) {
-		buffer[lenght] = 0;
-		if (safe_tls_write(ctx, buffer, lenght) == -1)
+		if (tls_safe_write(ctx, buffer, lenght) == -1) {
+			close(fd);
 			goto failure;
+		}
 	}
+
 	close(fd);
 
-	lenght = safe_tls_read(ctx, buffer, sizeof(buffer) - 1);
+	/* Recv. */
+	lenght = tls_safe_read(ctx, buffer, sizeof(buffer) - 1);
 	if (lenght == -1)
 		goto failure;
 	buffer[lenght] = 0;
@@ -181,15 +180,15 @@ submit_run(const char *login, const char *password, const char *path,
 		goto failure;
 	if (is_ok == 0) {
 		if (unparse_json_field(buffer, "message", STRING, &message))
-			return 1;
+			goto failure;
 		fprintf(stderr, "ejudge error: %s\n", message);
-		return 1;
+		goto failure;
 	}
 
 	/* TODO: Unwrap request. */
 	puts(buffer);
 
-    tls_close(ctx);
+	tls_close(ctx);
 	tls_free(ctx);
 	return 0;
 

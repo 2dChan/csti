@@ -14,7 +14,7 @@ $(BUILD_DIR):
 	mkdir -p $@
 
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
-	$(CC) -c ${CFLAGS} $< -o $@ ${LDFLAGS}
+	$(CC) -c ${CFLAGS} $< -o $@
 
 $(EXEC): $(OBJS)
 	$(CC) -o $(BUILD_DIR)/$@ $(OBJS) ${LDFLAGS}
