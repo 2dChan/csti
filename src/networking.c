@@ -51,6 +51,7 @@ auth(struct tls *ctx, const char *login, const char *password,
 	if (lenght == -1) 
 		return 1;
 	buffer[lenght] = 0;
+	
 	if (unparse_json_field(buffer, "ok", BOOL, &is_ok))
 		return 1;
 	if (is_ok == 0) {
@@ -91,19 +92,27 @@ unpack_header(char *header, char **contest_id, char **prob_id)
 struct tls *
 connect(void)
 {
-	/* 
-	 * TODO: 
-	 * 1) Error handle.
-	 * 2) Setup config.
-	 */
-
 	struct tls_config *config;
 	struct tls *ctx;
 
 	config = tls_config_new();
+	if (config == NULL) {
+		printf("tls_config_new: %s\n", tls_error(ctx));
+		return NULL;
+	}
 	ctx = tls_client();
-    tls_configure(ctx, config);
-	tls_connect(ctx, HOST, "443");
+	if (ctx == NULL) {
+		printf("tls_client: %s\n", tls_error(ctx));
+		return NULL;
+	}
+	if (tls_configure(ctx, config) == -1) {
+		printf("tls_configure: %s\n", tls_error(ctx));
+		return NULL;
+	}
+	if (tls_connect(ctx, HOST, "443") == -1) {
+		printf("tls_connect: %s\n", tls_error(ctx));
+		return NULL;
+	}
 
 	return ctx;
 }
@@ -125,7 +134,6 @@ submit_run(const char *login, const char *password, const char *path,
 	struct tls *ctx;
 	ssize_t lenght;
 	int fd, is_ok;
-
 
 	unpack_header(header, &contest_id, &prob_id);
 	if (contest_id == NULL || prob_id == NULL) {
