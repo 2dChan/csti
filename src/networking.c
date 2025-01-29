@@ -15,18 +15,17 @@
 #include "networking.h"
 #include "util.h"
 
-#define HOST "unicorn.ejudge.ru"
 #define BUFFER_SIZE 1024
 #define SID_LENGHT 17
 #define MESSAGE_LENGHT 100
 
 static int           auth(struct tls *, const char *, const char *,
-                          const char *, char *, char *);
-static struct tls    *connect(void);
+						  const char *, const char *, char *, char *);
+static struct tls    *connect(const char *);
 static void          unpack_header(char *, char **, char **);
 
 int 
-auth(struct tls *ctx, const char *login, const char *password,
+auth(struct tls *ctx, const char *host, const char *login, const char *password,
      const char *contest_id, char *sid, char *ejsid)
 {
 	static const char content_type[] = "application/x-www-form-urlencoded",
@@ -37,7 +36,7 @@ auth(struct tls *ctx, const char *login, const char *password,
 	ssize_t lenght = 0;
 	int is_ok;
 
-	request = make_post_request(HOST, content_type, 0, data_template, login, 
+	request = make_post_request(host, content_type, 0, data_template, login, 
 	                            password, contest_id);
 	if (request == NULL)
 		return 1;
@@ -90,7 +89,7 @@ unpack_header(char *header, char **contest_id, char **prob_id)
 }
 
 struct tls *
-connect(void)
+connect(const char *host)
 {
 	struct tls_config *config;
 	struct tls *ctx;
@@ -109,7 +108,7 @@ connect(void)
 		printf("tls_configure: %s\n", tls_error(ctx));
 		return NULL;
 	}
-	if (tls_connect(ctx, HOST, "443") == -1) {
+	if (tls_connect(ctx, host, "443") == -1) {
 		printf("tls_connect: %s\n", tls_error(ctx));
 		return NULL;
 	}
@@ -118,8 +117,8 @@ connect(void)
 }
 
 int 
-submit_run(const char *login, const char *password, const char *path, 
-            char *header) 
+submit_run(const char *host, const char *login, const char *password,
+           const char *path, char *header) 
 {
 	/*
 	 * TODO: Unparse lang_id from action=problem-status-json.
@@ -128,8 +127,8 @@ submit_run(const char *login, const char *password, const char *path,
 	data_template[] = 
 		"action=submit-run&json=1&SID=%s&EJSID=%s&prob_id=%s&lang_id=%s&file=";
 
-	char sid[SID_LENGHT], ejsid[SID_LENGHT], *contest_id, *prob_id, lang_id[] = "2";
-	char *request, buffer[BUFFER_SIZE], message[MESSAGE_LENGHT];
+	char *request, buffer[BUFFER_SIZE], message[MESSAGE_LENGHT],
+	sid[SID_LENGHT], ejsid[SID_LENGHT], *contest_id, *prob_id, lang_id[] = "2";
 	struct stat fstat;
 	struct tls *ctx;
 	ssize_t lenght;
@@ -142,16 +141,16 @@ submit_run(const char *login, const char *password, const char *path,
 	}
 	
 	/* Connect. */
-	ctx = connect();
+	ctx = connect(host);
 	if (ctx == NULL)
 		return 1;
-	if (auth(ctx, login, password, contest_id, sid, ejsid))
+	if (auth(ctx, host, login, password, contest_id, sid, ejsid))
 		goto failure;
 
 	/* Send. */
 	if (stat(path, &fstat) == -1)
 		goto failure;
-	request = make_post_request(HOST, "multipart/form-data", fstat.st_size, 
+	request = make_post_request(host, "multipart/form-data", fstat.st_size, 
 	                            data_template, sid, ejsid, prob_id, lang_id);
 	if(request == NULL)
 		goto failure;

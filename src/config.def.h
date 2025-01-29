@@ -1,3 +1,4 @@
+static const char host[] = "unicorn.ejudge.ru";
 static const char login[] = "";
 static const char password[] = "";
 
