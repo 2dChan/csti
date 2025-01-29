@@ -36,7 +36,6 @@
               '')
             ];
           };
-          LD_LIBRARY_PATH = nixpkgs.lib.makeLibraryPath [pkgs.libressl.cc.cc.lib];
       });
     };
 }

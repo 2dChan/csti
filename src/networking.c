@@ -96,7 +96,7 @@ connect(const char *host)
 
 	config = tls_config_new();
 	if (config == NULL) {
-		printf("tls_config_new: %s\n", tls_error(ctx));
+		printf("tls_config_new: %s\n", tls_config_error(config));
 		return NULL;
 	}
 	ctx = tls_client();
@@ -150,7 +150,7 @@ submit_run(const char *host, const char *login, const char *password,
 	/* Send. */
 	if (stat(path, &fstat) == -1)
 		goto failure;
-	request = make_post_request(host, "multipart/form-data", fstat.st_size, 
+	request = make_post_request(host, content_type, fstat.st_size, 
 	                            data_template, sid, ejsid, prob_id, lang_id);
 	if(request == NULL)
 		goto failure;
