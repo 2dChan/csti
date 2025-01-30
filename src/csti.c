@@ -24,6 +24,7 @@
 static int     apply_pre_send_actions(const char *);
 static char    *get_file_header(const char *);
 static void    get_last_modify_file(const char *, char *, time_t *);
+static void    get_status();
 static void    submit();
 static void    totemp_file(char *, const char *);
 
@@ -133,6 +134,24 @@ get_last_modify_file(const char *dir_path, char *file_path, time_t *file_mtime)
 	}
 }
 
+void get_status()
+{
+	char file_path[PATH_MAX], *header;
+	time_t file_mtime = 0;
+
+	get_last_modify_file(start_dir, file_path, &file_mtime);
+	if (file_mtime == 0){
+		fprintf(stderr, "get_last_modify_file: Can't find file\n");
+		exit(EXIT_FAILURE);
+	}
+
+	header = get_file_header(file_path);
+	if (header == NULL) 
+		exit(EXIT_FAILURE);
+
+	print_status_run(host, login, password, header);
+}
+
 void 
 submit()
 {
@@ -203,14 +222,21 @@ main(int argc, char *argv[])
 		submit();
 	}
 	else {
-		while ((let = getopt(argc, argv, "hv")) != -1) {
+		while ((let = getopt(argc, argv, "svh")) != -1) {
 			switch (let) {
+			case 's':
+				get_status();
+				break;
 			case 'v':
+				#ifdef VERSION
 				printf("%s %s\n", argv[0], VERSION);
-				exit(1);
+				#else
+				printf("%s\n", argv[0]);
+				#endif
+				exit(EXIT_FAILURE);
 			default:
 				printf("Usage: %s [-v]\n", argv[0]);
-				exit(1);
+				exit(EXIT_FAILURE);
 			}
 		}
 	}
