@@ -9,7 +9,6 @@
 #include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdint.h>
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
@@ -31,34 +30,35 @@ static void    totemp_file(char *, const char *);
 int 
 apply_pre_send_actions(const char *path)
 {
+	char command[BUF_SIZE], *write_ptr;
+	const char path_word[] = "path", *ptr;
+	const size_t lenght = sizeof(pre_send_actions)/sizeof(*pre_send_actions),
+	path_lenght = strlen(path), path_word_lenght = sizeof(path_word) - 1;
+	size_t i;
 	int status;
-	uint8_t i;
-	const char **p;
-	
-	for (p = pre_send_actions; *p;) {
-		for (i = 0; p[i] != NULL; ++i) {
-			if (strcmp(p[i], "path") == 0) {
-				p[i] = path;
+
+	for (i = 0; i < lenght; ++i) {
+		ptr = pre_send_actions[i];
+		write_ptr = command;
+		while (*ptr) {
+			if (strncmp(ptr, path_word, path_word_lenght) == 0) {
+				sprintf(write_ptr, "%s", path);
+				write_ptr += path_lenght;
+				ptr += path_word_lenght;
 			}
+			*write_ptr++ = *ptr++;
 		}
+		*write_ptr = 0;
 
-		switch(fork()) {
-		case -1:
-			perror("fork");
+		status = system(command);
+		if (status == -1) {
+			perror("status");
 			return 1;
-		case 0:
-			execvp(*p, (char *const *)p);
-			perror("execvp");
-			_exit(EXIT_FAILURE);
 		}
-
-		wait(&status);
 		if (WIFEXITED(status) == 0 || WEXITSTATUS(status) != 0) {
-			fprintf(stderr, "apply_pre_send_action: Action %s failed\n", *p);
+			fprintf(stderr, "apply_pre_send_action: Action %s failed\n", command);
 			return 1;
 		}
-
-		p += i + 1;
 	}
 
 	return 0;
@@ -120,7 +120,7 @@ get_last_modify_file(const char *dir_path, char *file_path, time_t *file_mtime)
 				exit(EXIT_FAILURE);
 			}
 			if (file_stat.st_mtime >= *file_mtime && 
-				    fnmatch(file_pattern, entry->d_name, 0) == 0) {
+			    fnmatch(file_pattern, entry->d_name, 0) == 0) {
 				*file_mtime = file_stat.st_mtime;
 				strcpy(file_path, path);
 			}

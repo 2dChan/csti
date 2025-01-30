@@ -8,11 +8,10 @@ static const char start_dir[] = ".";    /* "." - curret directory. */
 
 /* 
  * NOTE: 
- * 1) NULL ptr sign the end of the command.
- * 2) Two last NULL ptr sign the array end. 
- * 3) "path" replace to file path.
+ * 1) Replace "path" to file path.
+ * 2) Set ":" if array size zero.
  */
 static const char *pre_send_actions[] = {
-	"clang-format", "-i", "path", NULL,
-	NULL,
+	"sed -i '/cut/,/cut/d' path",
 };
+
