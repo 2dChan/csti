@@ -71,6 +71,9 @@ auth(struct tls *ctx, const char *host, const char *login, const char *password,
        unparse_json_field(buffer, "EJSID", STRING, ejsid))
 		return 1;
 	
+	// Clear socket fd.
+	while (lenght + 1 == BUFFER_SIZE && 
+	      (lenght = tls_safe_read(ctx, buffer, BUFFER_SIZE) > 0));
 	return 0;
 }
 
@@ -153,10 +156,10 @@ get_last_problem_run(struct problem_run *problem_run, struct tls *ctx,
 		problem_run->passed_tests = 0;
 		problem_run->score = 0;
 	}
+	
 	// Clear socket fd.
-	while (lenght + 1 == BUFFER_SIZE) {
-		lenght = tls_safe_read(ctx, buffer, BUFFER_SIZE);
-	}
+	while (lenght + 1 == BUFFER_SIZE && 
+	      (lenght = tls_safe_read(ctx, buffer, BUFFER_SIZE) > 0));
 
 	return 0;
 }
