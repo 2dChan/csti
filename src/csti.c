@@ -235,7 +235,7 @@ main(int argc, char *argv[])
 				#endif
 				exit(EXIT_FAILURE);
 			default:
-				printf("Usage: %s [-v]\n", argv[0]);
+				printf("Usage: %s [-v] [-s]\n", argv[0]);
 				exit(EXIT_FAILURE);
 			}
 		}
