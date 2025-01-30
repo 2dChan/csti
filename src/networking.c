@@ -50,9 +50,8 @@ auth(struct tls *ctx, const char *host, const char *login, const char *password,
 	                  data_template, login, password, contest_id);
 	if (lenght > sizeof(buffer))
 		return 1;
-	if (tls_safe_write(ctx, buffer, lenght) == -1) {
+	if (tls_safe_write(ctx, buffer, lenght) == -1)
 		return 1;
-	}
 
 	lenght = tls_safe_read(ctx, buffer, sizeof(buffer) - 1);
 	if (lenght == -1) 
@@ -68,7 +67,7 @@ auth(struct tls *ctx, const char *host, const char *login, const char *password,
 		return 1;
 	}
 	if (unparse_json_field(buffer, "SID", STRING, sid) ||
-       unparse_json_field(buffer, "EJSID", STRING, ejsid))
+        unparse_json_field(buffer, "EJSID", STRING, ejsid))
 		return 1;
 	
 	// Clear socket fd.
@@ -243,14 +242,12 @@ submit_run(const char *host, const char *login, const char *password,
 		perror("open");
 		goto failure;
 	}
-
 	while ((lenght = read(fd, buffer, sizeof(buffer))) != 0) {
 		if (tls_safe_write(ctx, buffer, lenght) == -1) {
 			close(fd);
 			goto failure;
 		}
 	}
-
 	close(fd);
 
 	/* Recv. */

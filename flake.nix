@@ -6,7 +6,7 @@
   };
 
   outputs =
-    { nixpkgs, ... }@inputs:
+    { self, nixpkgs, ... }@inputs:
     let
       supportedSystems = [
         "x86_64-linux"
@@ -16,9 +16,31 @@
       ];
       forAllSystems = nixpkgs.lib.genAttrs supportedSystems;
       pkgs = forAllSystems (system: nixpkgs.legacyPackages.${system});
+      nixpkgsFor = forAllSystems (system: import nixpkgs { inherit system; overlays = [ self.overlay ]; });
 
     in
     {
+      overlay = final: prev: {
+        csti = with final; stdenv.mkDerivation rec {
+          pname = "csti";
+          version = "1.0";
+
+          src = ./.;
+
+          buildInputs = [ libressl ];
+					
+					makeFlags = 
+						[
+							"PREFIX=$(out)"
+						];
+        };
+      };
+
+      packages = forAllSystems (system:
+        {
+          inherit (nixpkgsFor.${system}) csti;
+        });
+
       devShells = forAllSystems (system: {
         default = 
           pkgs.${system}.mkShellNoCC {
@@ -29,11 +51,6 @@
               libressl
               
               clang-tools
-              
-              (writeShellScriptBin "r" ''
-                make
-                ./build/csti "$@" 
-              '')
             ];
           };
       });

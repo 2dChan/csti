@@ -1,5 +1,5 @@
 static const char host[] = "unicorn.ejudge.ru";
-static const char lang_id[] = "2";
+static const char lang_id[] = "2"; /* C - 2/CPP - 3/NASM - 50 */
 static const char login[] = "";
 static const char password[] = "";
 
