@@ -24,8 +24,8 @@
 static int     apply_pre_send_actions(const char *);
 static char    *get_file_header(const char *);
 static void    get_last_modify_file(const char *, char *, time_t *);
-static void    get_status();
-static void    submit();
+static void    get_status(void);
+static void    submit(void);
 static void    totemp_file(char *, const char *);
 
 int 
@@ -134,7 +134,7 @@ get_last_modify_file(const char *dir_path, char *file_path, time_t *file_mtime)
 	}
 }
 
-void get_status()
+void get_status(void)
 {
 	char file_path[PATH_MAX], *header;
 	time_t file_mtime = 0;
@@ -153,7 +153,7 @@ void get_status()
 }
 
 void 
-submit()
+submit(void)
 {
 	char file_path[PATH_MAX], temp_path[] = "/tmp/tmp.XXXXXX", *header;
 	time_t file_mtime = 0;

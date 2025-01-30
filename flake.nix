@@ -1,58 +1,40 @@
 {
-  description = "Shell for С.";
+	description = "Universal contest systems terminal interface.";
 
-  inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-  };
+	inputs = {
+		nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
-  outputs =
-    { self, nixpkgs, ... }@inputs:
-    let
-      supportedSystems = [
-        "x86_64-linux"
-        "x86_64-darwin"
-        "aarch64-linux"
-        "aarch64-darwin"
-      ];
-      forAllSystems = nixpkgs.lib.genAttrs supportedSystems;
-      pkgs = forAllSystems (system: nixpkgs.legacyPackages.${system});
-      nixpkgsFor = forAllSystems (system: import nixpkgs { inherit system; overlays = [ self.overlay ]; });
+		flake-parts.url = "github:hercules-ci/flake-parts";
+	};
 
-    in
-    {
-      overlay = final: prev: {
-        csti = with final; stdenv.mkDerivation rec {
-          pname = "csti";
-          version = "1.0";
-
-          src = ./.;
-
-          buildInputs = [ libressl ];
-					
-					makeFlags = 
-						[
-							"PREFIX=$(out)"
+	outputs = inputs@{ flake-parts, ... }:
+		flake-parts.lib.mkFlake { inherit inputs; } {
+			systems = [ "x86_64-linux" "aarch64-linux" "aarch64-darwin" "x86_64-darwin" ];
+			perSystem = { config, self', inputs', pkgs, system, lib, ... }: {
+				devShells = {
+					default = pkgs.mkShell {
+						packages = with pkgs; [
+							gdb
+							gnumake
+							libressl
 						];
-        };
-      };
+					};
+				};
 
-      packages = forAllSystems (system:
-        {
-          inherit (nixpkgsFor.${system}) csti;
-        });
-
-      devShells = forAllSystems (system: {
-        default = 
-          pkgs.${system}.mkShellNoCC {
-            packages = with pkgs.${system}; [
-              gcc
-              gdb
-              gnumake
-              libressl
-              
-              clang-tools
-            ];
-          };
-      });
-    };
+				packages = {
+					csti = pkgs.stdenv.mkDerivation rec {
+						pname = "csti";
+						version = "1.0";
+						src = ./.;
+						
+						buildInputs = [ pkgs.libressl ];
+						
+						makeFlags = 
+							[
+								"PREFIX=$(out)"
+							];
+					};
+				};
+			};
+		};
 }
