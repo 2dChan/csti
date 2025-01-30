@@ -198,7 +198,7 @@ void print_status_run(const char *host, const char *login, const char *password,
 
 int 
 submit_run(const char *host, const char *login, const char *password,
-           const char *path, char *header) 
+           const char *path, const char *lang_id, char *header) 
 {
 	/*
 	 * TODO: Unparse lang_id from action=problem-status-json.
@@ -208,7 +208,7 @@ submit_run(const char *host, const char *login, const char *password,
 		"action=submit-run&json=1&SID=%s&EJSID=%s&prob_id=%s&lang_id=%s&file=";
 
 	char buffer[BUFFER_SIZE], message[MESSAGE_LENGHT],
-	sid[SID_LENGHT], ejsid[SID_LENGHT], *contest_id, *prob_id, lang_id[] = "2";
+	sid[SID_LENGHT], ejsid[SID_LENGHT], *contest_id, *prob_id;
 	struct stat fstat;
 	struct tls *ctx;
 	ssize_t lenght;
