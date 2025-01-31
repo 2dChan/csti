@@ -37,12 +37,11 @@ enum type {
 	UINT,
 };
 
-/* NOTE: Read only %s from format. */
 ssize_t tls_safe_read(struct tls *, void *, size_t);
 ssize_t tls_safe_write(struct tls *, const void *, size_t);
 
-void make_post_request(char *, ssize_t *, const char *, const char *,
-	const size_t, const char *, ...);
+ssize_t make_post_request(char *, const char *, const char *, const size_t,
+	const char *, ...);
 void unpack_header(char *, char **, char **);
 int unparse_json_field(const char *, const char *, enum type, void *);
 

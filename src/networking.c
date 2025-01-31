@@ -25,6 +25,10 @@ struct problem_run {
 	unsigned int status;
 };
 
+struct problem_info {
+	unsigned int lang_id;
+};
+
 static int auth(struct tls *, const char *, const char *, const char *,
 	const char *, char *, char *);
 static struct tls *connect(const char *);
@@ -45,10 +49,12 @@ auth(struct tls *ctx, const char *host, const char *login, const char *password,
 	ssize_t lenght = 0;
 	int is_ok;
 
-	make_post_request(buffer, &lenght, host, content_type, 0, data_template,
+	lenght = make_post_request(buffer, host, content_type, 0, data_template,
 		login, password, contest_id);
-	if (lenght > sizeof(buffer))
+	if (lenght > sizeof(buffer) || lenght == -1) {
+		fprintf(stderr, "make_post_request error: Lenght %ld", lenght);
 		return 1;
+	}
 	if (tls_safe_write(ctx, buffer, lenght) == -1)
 		return 1;
 
@@ -102,6 +108,48 @@ connect(const char *host)
 	}
 
 	return ctx;
+}
+
+int
+get_problem_info(struct problem_info *problem_info, struct tls *ctx,
+	const char *host, const char *sid, const char *ejsid, const char *problem)
+{
+	static const char problem_runs_request[] = GET_REQUEST_TEMPLATE(
+		"action=problem-status-json&problem=%s");
+
+	char buffer[BUFFER_SIZE], message[MESSAGE_LENGHT];
+	size_t lenght;
+	int is_ok;
+
+	lenght = sprintf(buffer, problem_runs_request, sid, ejsid, problem, host);
+	if (lenght > sizeof(buffer))
+		return 1;
+	if (tls_safe_write(ctx, buffer, lenght) == -1)
+		return 1;
+
+	lenght = tls_safe_read(ctx, buffer, sizeof(buffer) - 1);
+	if (lenght == -1)
+		return 1;
+	buffer[lenght] = 0;
+
+	if (unparse_json_field(buffer, "ok", BOOL, &is_ok))
+		return 1;
+	if (is_ok == 0) {
+		if (unparse_json_field(buffer, "message", STRING, &message))
+			return 1;
+		fprintf(stderr, "ejudge error: %s\n", message);
+		return 1;
+	}
+	/* NOTE: Unparse array as INT maybe not stable, and get only first num. */
+	if (unparse_json_field(buffer, "compilers", INT, &problem_info->lang_id))
+		return 1;
+
+	// Clear socket fd.
+	while (lenght + 1 == BUFFER_SIZE &&
+		(lenght = tls_safe_read(ctx, buffer, BUFFER_SIZE) > 0))
+		;
+
+	return 0;
 }
 
 int
@@ -197,18 +245,16 @@ print_status_run(const char *host, const char *login, const char *password,
 
 int
 submit_run(const char *host, const char *login, const char *password,
-	const char *path, const char *lang_id, char *header)
+	const char *path, char *header)
 {
-	/*
-	 * TODO: Unparse lang_id from action=problem-status-json.
-	 */
 	static const char
 		content_type[] = "multipart/form-data",
 		data_template[] =
-			"action=submit-run&json=1&SID=%s&EJSID=%s&prob_id=%s&lang_id=%s&file=";
+			"action=submit-run&json=1&SID=%s&EJSID=%s&prob_id=%s&lang_id=%u&file=";
 
 	char buffer[BUFFER_SIZE], message[MESSAGE_LENGHT], sid[SID_LENGHT],
 		ejsid[SID_LENGHT], *contest_id, *prob_id;
+	struct problem_info info;
 	struct stat fstat;
 	struct tls *ctx;
 	ssize_t lenght;
@@ -228,12 +274,18 @@ submit_run(const char *host, const char *login, const char *password,
 		goto failure;
 
 	/* Send. */
+	if (get_problem_info(&info, ctx, host, sid, ejsid, prob_id)) {
+		return 1;
+	}
+
 	if (stat(path, &fstat) == -1)
 		goto failure;
-	make_post_request(buffer, &lenght, host, content_type, fstat.st_size,
-		data_template, sid, ejsid, prob_id, lang_id);
-	if (lenght > sizeof(buffer))
+	lenght = make_post_request(buffer, host, content_type, fstat.st_size,
+		data_template, sid, ejsid, prob_id, info.lang_id);
+	if (lenght > sizeof(buffer) || lenght == -1) {
+		fprintf(stderr, "make_post_request error: Lenght %ld", lenght);
 		goto failure;
+	}
 	if (tls_safe_write(ctx, buffer, lenght) == -1) {
 		goto failure;
 	}

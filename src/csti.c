@@ -174,7 +174,7 @@ submit(void)
 	totemp_file(temp_path, file_path);
 	if (apply_pre_send_actions(temp_path))
 		goto failure_exit;
-	if (submit_run(host, login, password, temp_path, lang_id, header))
+	if (submit_run(host, login, password, temp_path, header))
 		goto failure_exit;
 
 	free(header);

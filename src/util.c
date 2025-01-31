@@ -10,6 +10,8 @@
 
 #include "util.h"
 
+#define BUFFER_SIZE 1024
+
 ssize_t
 tls_safe_read(struct tls *ctx, void *buf, size_t len)
 {
@@ -42,68 +44,37 @@ tls_safe_write(struct tls *ctx, const void *buf, size_t len)
 	return write_len;
 }
 
-void
-make_post_request(char *request, ssize_t *request_lenght, const char *host,
-	const char *content_type, const size_t additonal_lenght,
-	const char *data_format, ...)
+ssize_t
+make_post_request(char *request, const char *host, const char *content_type,
+	const size_t additonal_lenght, const char *data_format, ...)
 {
-	static const char post_request_template[] =
-		"POST /cgi-bin/new-client HTTP/1.1\r\n"
-		"Host: %s\r\n"
-		"Conncetion: keep-alive\r\n"
-		"Content-Type: %s\r\n"
-		"Content-Length: %lu\r\n"
-		"\r\n";
+	static const char template[] = "POST /cgi-bin/new-client HTTP/1.1\r\n"
+								   "Host: %s\r\n"
+								   "Conncetion: keep-alive\r\n"
+								   "Content-Type: %s\r\n"
+								   "Content-Length: %lu\r\n"
+								   "\r\n"
+								   "%s";
 
-	size_t content_lenght, lenght;
-	char *arg, *write_ptr;
-	const char *ptr;
+	char content[BUFFER_SIZE];
+	ssize_t lenght;
 
 	va_list args;
 	va_start(args, data_format);
-
-	content_lenght = strlen(data_format);
-	ptr = data_format;
-	while (1) {
-		while (*ptr && *ptr++ != '%')
-			;
-		if (*ptr == 0)
-			break;
-
-		switch (*ptr) {
-		case 's':
-			arg = va_arg(args, char *);
-			// Sub 2 because in data_format include %s.
-			content_lenght += strlen(arg) - 2;
-		case '%':
-			continue;
-		default:
-			fprintf(stderr, "make_post_request: Unsuported format %%%c", *ptr);
-		}
+	lenght = vsprintf(content, data_format, args);
+	if (lenght > BUFFER_SIZE || lenght == -1) {
+		perror("vsprintf");
+		return -1;
 	}
 
-	lenght = sprintf(request, post_request_template, host, content_type,
-		content_lenght + additonal_lenght);
-
-	*request_lenght = content_lenght + lenght;
-
-	ptr = data_format;
-	write_ptr = request + lenght;
-	va_start(args, data_format);
-	while (*ptr) {
-		if (strncmp(ptr, "%s", 2) == 0) {
-			arg = va_arg(args, char *);
-			lenght = strlen(arg);
-			memcpy(write_ptr, arg, lenght);
-			write_ptr += lenght;
-			ptr += 2;
-			continue;
-		}
-
-		*write_ptr++ = *ptr++;
-		*write_ptr = 0;
+	lenght = sprintf(request, template, host, content_type,
+		lenght + additonal_lenght, content);
+	if (lenght < 0) {
+		perror("spinrtf");
+		return -1;
 	}
-	*write_ptr = 0;
+
+	return lenght;
 }
 
 void
