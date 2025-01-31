@@ -32,8 +32,9 @@ struct problem_info {
 static int auth(struct tls *, const char *, const char *, const char *,
 	const char *, char *, char *);
 static struct tls *connect(const char *);
-/* NOTE: Retrun only last run. */
-static int get_last_problem_run(struct problem_run *, struct tls *,
+static int get_problem_info(struct problem_info *, struct tls *, const char *,
+	const char *, const char *, const char *);
+static int get_problem_runs(struct problem_run *, unsigned int, struct tls *,
 	const char *, const char *, const char *, const char *);
 
 int
@@ -76,9 +77,11 @@ auth(struct tls *ctx, const char *host, const char *login, const char *password,
 		return 1;
 
 	// Clear socket fd.
-	while (lenght + 1 == BUFFER_SIZE &&
-		(lenght = tls_safe_read(ctx, buffer, BUFFER_SIZE) > 0))
-		;
+	while (lenght + 1 == BUFFER_SIZE && lenght != 0) {
+		lenght = tls_safe_read(ctx, buffer, BUFFER_SIZE);
+		if (lenght == -1)
+			return -1;
+	}
 	return 0;
 }
 
@@ -145,71 +148,85 @@ get_problem_info(struct problem_info *problem_info, struct tls *ctx,
 		return 1;
 
 	// Clear socket fd.
-	while (lenght + 1 == BUFFER_SIZE &&
-		(lenght = tls_safe_read(ctx, buffer, BUFFER_SIZE) > 0))
-		;
+	while (lenght + 1 == BUFFER_SIZE && lenght != 0) {
+		lenght = tls_safe_read(ctx, buffer, BUFFER_SIZE);
+		if (lenght == -1)
+			return -1;
+	}
 
 	return 0;
 }
 
 int
-get_last_problem_run(struct problem_run *problem_run, struct tls *ctx,
+get_problem_runs(struct problem_run *runs, unsigned int n, struct tls *ctx,
 	const char *host, const char *sid, const char *ejsid, const char *problem)
 {
 	static const char problem_runs_request[] = GET_REQUEST_TEMPLATE(
 		"action=list-runs-json&prob_id=%s");
 
 	char buffer[BUFFER_SIZE], message[MESSAGE_LENGHT];
-	size_t lenght;
-	int is_ok;
+	size_t lenght, i;
+	int is_ok, status;
 
 	lenght = sprintf(buffer, problem_runs_request, sid, ejsid, problem, host);
 	if (lenght > sizeof(buffer)) {
-		return 1;
+		return -1;
 	}
 	if (tls_safe_write(ctx, buffer, lenght) == -1) {
-		return 1;
+		return -1;
 	}
 
 	lenght = tls_safe_read(ctx, buffer, sizeof(buffer) - 1);
 	if (lenght == -1)
-		return 1;
+		return -1;
 	buffer[lenght] = 0;
 
 	if (unparse_json_field(buffer, "ok", BOOL, &is_ok))
-		return 1;
+		return -1;
 	if (is_ok == 0) {
 		if (unparse_json_field(buffer, "message", STRING, &message))
-			return 1;
+			return -1;
 		fprintf(stderr, "ejudge error: %s\n", message);
-		return 1;
+		return -1;
 	}
-
-	bzero(problem_run, sizeof(*problem_run));
-	if (unparse_json_field(buffer, "run_id", UINT, &problem_run->id) == 1 ||
-		unparse_json_field(buffer, "prob_id", UINT, &problem_run->prob_id) ==
-			1 ||
-		unparse_json_field(buffer, "status", UINT, &problem_run->status) == 1) {
-		return 1;
-	}
-	if (problem_run->status == PARITIAL_SOLUTION) {
-		if (unparse_json_field(buffer, "passed_tests", UINT,
-				&problem_run->passed_tests) == 1 ||
-			unparse_json_field(buffer, "score", UINT, &problem_run->score) ==
-				1) {
-			return 1;
+	for (i = 0; i < n; ++i) {
+		status = unparse_json_field(buffer, "run_id", UINT, &runs[i].id);
+		if (status == 2) {
+			if (lenght + 1 == BUFFER_SIZE) {
+				lenght = tls_safe_read(ctx, buffer, BUFFER_SIZE);
+				if (lenght == -1)
+					return -2;
+				buffer[lenght] = 0;
+			} else
+				break;
 		}
-	} else {
-		problem_run->passed_tests = 0;
-		problem_run->score = 0;
+
+		if (status ||
+			unparse_json_field(buffer, "prob_id", UINT, &runs[i].prob_id) ||
+			unparse_json_field(buffer, "status", UINT, &runs[i].status)) {
+			return -1;
+		}
+		if (runs[i].status == PARITIAL_SOLUTION || runs[i].status == OK) {
+			if (unparse_json_field(buffer, "passed_tests", UINT,
+					&runs[i].passed_tests) == 1 ||
+				unparse_json_field(buffer, "score", UINT, &runs[i].score) ==
+					1) {
+				return -1;
+			}
+		} else {
+			runs[i].passed_tests = 0;
+			runs[i].score = 0;
+		}
 	}
 
 	// Clear socket fd.
-	while (lenght + 1 == BUFFER_SIZE &&
-		(lenght = tls_safe_read(ctx, buffer, BUFFER_SIZE) > 0))
-		;
+	while (lenght + 1 == BUFFER_SIZE && lenght != 0) {
+		lenght = tls_safe_read(ctx, buffer, BUFFER_SIZE);
+		if (lenght == -1)
+			return -1;
+	}
 
-	return 0;
+	return i;
 }
 
 void
@@ -220,6 +237,7 @@ print_status_run(const char *host, const char *login, const char *password,
 	const char *status;
 	struct problem_run problem_run;
 	struct tls *ctx;
+	ssize_t lenght;
 
 	unpack_header(header, &contest_id, &prob_id);
 	if (contest_id == NULL || prob_id == NULL) {
@@ -233,8 +251,13 @@ print_status_run(const char *host, const char *login, const char *password,
 	if (auth(ctx, host, login, password, contest_id, sid, ejsid))
 		exit(EXIT_FAILURE);
 
-	if (get_last_problem_run(&problem_run, ctx, host, sid, ejsid, prob_id))
+	lenght = get_problem_runs(&problem_run, 1, ctx, host, sid, ejsid, prob_id);
+	if (lenght == -1)
 		exit(EXIT_FAILURE);
+	if (lenght == -2) {
+		printf("No solutions found");
+		return;
+	}
 
 	status = get_problem_status_name(problem_run.status);
 	printf("Prob id |Run id |%-*s |Tests |Score \n"
