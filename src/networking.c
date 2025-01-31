@@ -1,21 +1,20 @@
-/* 
- * See LICENSE file for copyright and license details. 
+/*
+ * See LICENSE file for copyright and license details.
  */
-#include <tls.h>
-
 #include <sys/stat.h>
 
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <fcntl.h>
+#include <tls.h>
 #include <unistd.h>
 
 #include "networking.h"
 #include "util.h"
 
-#define BUFFER_SIZE 4096
-#define SID_LENGHT 17
+#define BUFFER_SIZE    4096
+#define SID_LENGHT     17
 #define MESSAGE_LENGHT 100
 
 struct problem_run {
@@ -26,38 +25,38 @@ struct problem_run {
 	unsigned int status;
 };
 
-static int         auth(struct tls *, const char *, const char *,
-                        const char *, const char *, char *, char *);
-static struct tls  *connect(const char *);
+static int auth(struct tls *, const char *, const char *, const char *,
+    const char *, char *, char *);
+static struct tls *connect(const char *);
 /* NOTE: Retrun only last run. */
-static int         get_last_problem_run(struct problem_run *, struct tls *, 
-                                        const char *, const char *, 
-                                        const char *, const char *);
+static int get_last_problem_run(struct problem_run *, struct tls *,
+    const char *, const char *, const char *, const char *);
 
-int 
+int
 auth(struct tls *ctx, const char *host, const char *login, const char *password,
-     const char *contest_id, char *sid, char *ejsid)
+    const char *contest_id, char *sid, char *ejsid)
 {
-	static const char content_type[] = "application/x-www-form-urlencoded",
-	data_template[] = 
+	static const char
+	    content_type[] = "application/x-www-form-urlencoded",
+	    data_template[] =
 		"action=login-json&login=%s&password=%s&contest_id=%s&json=1";
 
 	char buffer[BUFFER_SIZE], message[MESSAGE_LENGHT];
 	ssize_t lenght = 0;
 	int is_ok;
 
-	make_post_request(buffer, &lenght, host, content_type, 0, 
-	                  data_template, login, password, contest_id);
+	make_post_request(buffer, &lenght, host, content_type, 0, data_template,
+	    login, password, contest_id);
 	if (lenght > sizeof(buffer))
 		return 1;
 	if (tls_safe_write(ctx, buffer, lenght) == -1)
 		return 1;
 
 	lenght = tls_safe_read(ctx, buffer, sizeof(buffer) - 1);
-	if (lenght == -1) 
+	if (lenght == -1)
 		return 1;
 	buffer[lenght] = 0;
-	
+
 	if (unparse_json_field(buffer, "ok", BOOL, &is_ok))
 		return 1;
 	if (is_ok == 0) {
@@ -67,12 +66,13 @@ auth(struct tls *ctx, const char *host, const char *login, const char *password,
 		return 1;
 	}
 	if (unparse_json_field(buffer, "SID", STRING, sid) ||
-        unparse_json_field(buffer, "EJSID", STRING, ejsid))
+	    unparse_json_field(buffer, "EJSID", STRING, ejsid))
 		return 1;
-	
+
 	// Clear socket fd.
-	while (lenght + 1 == BUFFER_SIZE && 
-	      (lenght = tls_safe_read(ctx, buffer, BUFFER_SIZE) > 0));
+	while (lenght + 1 == BUFFER_SIZE &&
+	    (lenght = tls_safe_read(ctx, buffer, BUFFER_SIZE) > 0))
+		;
 	return 0;
 }
 
@@ -106,17 +106,17 @@ connect(const char *host)
 
 int
 get_last_problem_run(struct problem_run *problem_run, struct tls *ctx,
-                      const char *host, const char *sid, const char *ejsid,
-                      const char *problem) 
+    const char *host, const char *sid, const char *ejsid, const char *problem)
 {
-	static const char problem_runs_request[] =
-		GET_REQUEST_TEMPLATE("action=list-runs-json&prob_id=%s");
+	static const char problem_runs_request[] = GET_REQUEST_TEMPLATE(
+	    "action=list-runs-json&prob_id=%s");
 
 	char buffer[BUFFER_SIZE], message[MESSAGE_LENGHT];
 	size_t lenght;
 	int is_ok;
 
-	lenght = sprintf(buffer, problem_runs_request, sid, ejsid, problem, host);
+	lenght = sprintf(buffer, problem_runs_request, sid, ejsid, problem,
+	    host);
 	if (lenght > sizeof(buffer)) {
 		return 1;
 	}
@@ -131,7 +131,7 @@ get_last_problem_run(struct problem_run *problem_run, struct tls *ctx,
 
 	if (unparse_json_field(buffer, "ok", BOOL, &is_ok))
 		return 1;
-	if(is_ok == 0) {
+	if (is_ok == 0) {
 		if (unparse_json_field(buffer, "message", STRING, &message))
 			return 1;
 		fprintf(stderr, "ejudge error: %s\n", message);
@@ -140,31 +140,35 @@ get_last_problem_run(struct problem_run *problem_run, struct tls *ctx,
 
 	bzero(problem_run, sizeof(*problem_run));
 	if (unparse_json_field(buffer, "run_id", UINT, &problem_run->id) == 1 ||
-		unparse_json_field(buffer, "prob_id", UINT, &problem_run->prob_id) == 1 ||
-		unparse_json_field(buffer, "status", UINT, &problem_run->status) == 1) {
+	    unparse_json_field(buffer, "prob_id", UINT,
+		&problem_run->prob_id) == 1 ||
+	    unparse_json_field(buffer, "status", UINT, &problem_run->status) ==
+		1) {
 		return 1;
 	}
 	if (problem_run->status == PARITIAL_SOLUTION) {
-		if (unparse_json_field(buffer, "passed_tests", UINT, 
-			                   &problem_run->passed_tests) == 1 ||
-			unparse_json_field(buffer, "score", UINT, &problem_run->score) == 1) {
+		if (unparse_json_field(buffer, "passed_tests", UINT,
+			&problem_run->passed_tests) == 1 ||
+		    unparse_json_field(buffer, "score", UINT,
+			&problem_run->score) == 1) {
 			return 1;
 		}
-	}
-	else {
+	} else {
 		problem_run->passed_tests = 0;
 		problem_run->score = 0;
 	}
-	
+
 	// Clear socket fd.
-	while (lenght + 1 == BUFFER_SIZE && 
-	      (lenght = tls_safe_read(ctx, buffer, BUFFER_SIZE) > 0));
+	while (lenght + 1 == BUFFER_SIZE &&
+	    (lenght = tls_safe_read(ctx, buffer, BUFFER_SIZE) > 0))
+		;
 
 	return 0;
 }
 
-void print_status_run(const char *host, const char *login, const char *password,
-                      char *header)
+void
+print_status_run(const char *host, const char *login, const char *password,
+    char *header)
 {
 	char sid[SID_LENGHT], ejsid[SID_LENGHT], *contest_id, *prob_id;
 	const char *status;
@@ -187,27 +191,27 @@ void print_status_run(const char *host, const char *login, const char *password,
 		exit(EXIT_FAILURE);
 
 	status = get_problem_status_name(problem_run.status);
-	printf(
-	    "Prob id |Run id |%-*s |Tests |Score \n"
-	    "%-8u|%-7u|%-6s |%-6u|%-6u\n", 
-		(int)strlen(status), "Status", problem_run.prob_id, problem_run.id,
-		status,  problem_run.passed_tests, problem_run.score
-	);
+	printf("Prob id |Run id |%-*s |Tests |Score \n"
+	       "%-8u|%-7u|%-6s |%-6u|%-6u\n",
+	    (int)strlen(status), "Status", problem_run.prob_id, problem_run.id,
+	    status, problem_run.passed_tests, problem_run.score);
 }
 
-int 
+int
 submit_run(const char *host, const char *login, const char *password,
-           const char *path, const char *lang_id, char *header) 
+    const char *path, const char *lang_id, char *header)
 {
 	/*
 	 * TODO: Unparse lang_id from action=problem-status-json.
 	 */
-	static const char content_type[] = "multipart/form-data",
-	data_template[] = 
-		"action=submit-run&json=1&SID=%s&EJSID=%s&prob_id=%s&lang_id=%s&file=";
+	static const char
+	    content_type
+		[] = "multipart/form-data",
+    data_template[] =
+	    "action=submit-run&json=1&SID=%s&EJSID=%s&prob_id=%s&lang_id=%s&file=";
 
-	char buffer[BUFFER_SIZE], message[MESSAGE_LENGHT],
-	sid[SID_LENGHT], ejsid[SID_LENGHT], *contest_id, *prob_id;
+	char buffer[BUFFER_SIZE], message[MESSAGE_LENGHT], sid[SID_LENGHT],
+	    ejsid[SID_LENGHT], *contest_id, *prob_id;
 	struct stat fstat;
 	struct tls *ctx;
 	ssize_t lenght;
@@ -218,7 +222,7 @@ submit_run(const char *host, const char *login, const char *password,
 		fprintf(stderr, "unpack_header: Header presentation error\n");
 		return 1;
 	}
-	
+
 	/* Connect. */
 	ctx = connect(host);
 	if (ctx == NULL)
@@ -229,9 +233,9 @@ submit_run(const char *host, const char *login, const char *password,
 	/* Send. */
 	if (stat(path, &fstat) == -1)
 		goto failure;
-	make_post_request(buffer, &lenght, host, content_type, fstat.st_size, 
-	                  data_template, sid, ejsid, prob_id, lang_id);
-	if(lenght > sizeof(buffer))
+	make_post_request(buffer, &lenght, host, content_type, fstat.st_size,
+	    data_template, sid, ejsid, prob_id, lang_id);
+	if (lenght > sizeof(buffer))
 		goto failure;
 	if (tls_safe_write(ctx, buffer, lenght) == -1) {
 		goto failure;
@@ -277,4 +281,3 @@ failure:
 	tls_free(ctx);
 	return 1;
 }
-

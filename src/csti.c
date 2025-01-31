@@ -1,5 +1,5 @@
-/* 
- * See LICENSE file for copyright and license details. 
+/*
+ * See LICENSE file for copyright and license details.
  */
 #include <sys/stat.h>
 
@@ -18,22 +18,24 @@
 #include "networking.h"
 
 #define HEADER_SIZE 10
-#define BUF_SIZE 1024
+#define BUF_SIZE    1024
 
-static int     apply_pre_send_actions(const char *);
-static char    *get_file_header(const char *);
-static void    get_last_modify_file(const char *, char *, time_t *);
-static void    get_status(void);
-static void    submit(void);
-static void    totemp_file(char *, const char *);
+static int apply_pre_send_actions(const char *);
+static char *get_file_header(const char *);
+static void get_last_modify_file(const char *, char *, time_t *);
+static void get_status(void);
+static void submit(void);
+static void totemp_file(char *, const char *);
 
-int 
+int
 apply_pre_send_actions(const char *path)
 {
 	char command[BUF_SIZE], *write_ptr;
 	const char path_word[] = "path", *ptr;
-	const size_t lenght = sizeof(pre_send_actions)/sizeof(*pre_send_actions),
-	path_lenght = strlen(path), path_word_lenght = sizeof(path_word) - 1;
+	const size_t lenght = sizeof(pre_send_actions) /
+	    sizeof(*pre_send_actions),
+		     path_lenght = strlen(path),
+		     path_word_lenght = sizeof(path_word) - 1;
 	size_t i;
 	int status;
 
@@ -56,7 +58,9 @@ apply_pre_send_actions(const char *path)
 			return 1;
 		}
 		if (WIFEXITED(status) == 0 || WEXITSTATUS(status) != 0) {
-			fprintf(stderr, "apply_pre_send_action: Action %s failed\n", command);
+			fprintf(stderr,
+			    "apply_pre_send_action: Action %s failed\n",
+			    command);
 			return 1;
 		}
 	}
@@ -106,7 +110,8 @@ get_last_modify_file(const char *dir_path, char *file_path, time_t *file_mtime)
 	}
 
 	while ((entry = readdir(dir))) {
-		if (strcmp(entry->d_name, "..") == 0 || strcmp(entry->d_name, ".") == 0)
+		if (strcmp(entry->d_name, "..") == 0 ||
+		    strcmp(entry->d_name, ".") == 0)
 			continue;
 
 		snprintf(path, sizeof(path), "%s/%s", dir_path, entry->d_name);
@@ -119,7 +124,7 @@ get_last_modify_file(const char *dir_path, char *file_path, time_t *file_mtime)
 				perror("stat");
 				exit(EXIT_FAILURE);
 			}
-			if (file_stat.st_mtime >= *file_mtime && 
+			if (file_stat.st_mtime >= *file_mtime &&
 			    fnmatch(file_pattern, entry->d_name, 0) == 0) {
 				*file_mtime = file_stat.st_mtime;
 				strcpy(file_path, path);
@@ -134,50 +139,51 @@ get_last_modify_file(const char *dir_path, char *file_path, time_t *file_mtime)
 	}
 }
 
-void get_status(void)
+void
+get_status(void)
 {
 	char file_path[PATH_MAX], *header;
 	time_t file_mtime = 0;
 
 	get_last_modify_file(start_dir, file_path, &file_mtime);
-	if (file_mtime == 0){
+	if (file_mtime == 0) {
 		fprintf(stderr, "get_last_modify_file: Can't find file\n");
 		exit(EXIT_FAILURE);
 	}
 
 	header = get_file_header(file_path);
-	if (header == NULL) 
+	if (header == NULL)
 		exit(EXIT_FAILURE);
 
 	print_status_run(host, login, password, header);
 }
 
-void 
+void
 submit(void)
 {
 	char file_path[PATH_MAX], temp_path[] = "/tmp/tmp.XXXXXX", *header;
 	time_t file_mtime = 0;
 
 	get_last_modify_file(start_dir, file_path, &file_mtime);
-	if (file_mtime == 0){
+	if (file_mtime == 0) {
 		fprintf(stderr, "get_last_modify_file: Can't find file\n");
 		exit(EXIT_FAILURE);
 	}
 
 	header = get_file_header(file_path);
-	if (header == NULL) 
+	if (header == NULL)
 		exit(EXIT_FAILURE);
 
 	totemp_file(temp_path, file_path);
 	if (apply_pre_send_actions(temp_path))
 		goto failure_exit;
-	if (submit_run(host, login, password, temp_path, lang_id ,header))
+	if (submit_run(host, login, password, temp_path, lang_id, header))
 		goto failure_exit;
 
 	free(header);
 	unlink(temp_path);
 	return;
-	
+
 failure_exit:
 	free(header);
 	unlink(temp_path);
@@ -201,7 +207,7 @@ totemp_file(char *temp_path, const char *template_path)
 		perror("mkstemp");
 		exit(EXIT_FAILURE);
 	}
-	
+
 	while ((lenght = read(fd_r, buf, sizeof(buf))) != 0) {
 		if (write(fd_w, buf, lenght) == -1) {
 			perror("write");
@@ -220,19 +226,18 @@ main(int argc, char *argv[])
 
 	if (argc == 1) {
 		submit();
-	}
-	else {
+	} else {
 		while ((let = getopt(argc, argv, "svh")) != -1) {
 			switch (let) {
 			case 's':
 				get_status();
 				break;
 			case 'v':
-				#ifdef VERSION
+#ifdef VERSION
 				printf("%s %s\n", argv[0], VERSION);
-				#else
+#else
 				printf("%s\n", argv[0]);
-				#endif
+#endif
 				exit(EXIT_FAILURE);
 			default:
 				printf("Usage: %s [-v] [-s]\n", argv[0]);

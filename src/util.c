@@ -1,13 +1,12 @@
 /*
  * See LICENSE file for copyright and license details.
  */
-#include <tls.h>
-
 #include <ctype.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <tls.h>
 
 #include "util.h"
 
@@ -44,18 +43,18 @@ tls_safe_write(struct tls *ctx, const void *buf, size_t len)
 }
 
 void
-make_post_request(char *request, ssize_t *request_lenght, const char *host, 
-                  const char *content_type, const size_t additonal_lenght, 
-                  const char *data_format, ...)
+make_post_request(char *request, ssize_t *request_lenght, const char *host,
+    const char *content_type, const size_t additonal_lenght,
+    const char *data_format, ...)
 {
-	static const char post_request_template[] = 
-		"POST /cgi-bin/new-client HTTP/1.1\r\n"
-		"Host: %s\r\n"
-		"Conncetion: keep-alive\r\n"
-		"Content-Type: %s\r\n"
-		"Content-Length: %lu\r\n"
-		"\r\n";
-	
+	static const char post_request_template[] =
+	    "POST /cgi-bin/new-client HTTP/1.1\r\n"
+	    "Host: %s\r\n"
+	    "Conncetion: keep-alive\r\n"
+	    "Content-Type: %s\r\n"
+	    "Content-Length: %lu\r\n"
+	    "\r\n";
+
 	size_t content_lenght, lenght;
 	char *arg, *write_ptr;
 	const char *ptr;
@@ -66,7 +65,8 @@ make_post_request(char *request, ssize_t *request_lenght, const char *host,
 	content_lenght = strlen(data_format);
 	ptr = data_format;
 	while (1) {
-		while (*ptr && *ptr++ != '%');
+		while (*ptr && *ptr++ != '%')
+			;
 		if (*ptr == 0)
 			break;
 
@@ -78,12 +78,13 @@ make_post_request(char *request, ssize_t *request_lenght, const char *host,
 		case '%':
 			continue;
 		default:
-			fprintf(stderr, "make_post_request: Unsuported format %%%c", *ptr);
+			fprintf(stderr,
+			    "make_post_request: Unsuported format %%%c", *ptr);
 		}
 	}
 
-	lenght = sprintf(request, post_request_template, host,
-	                          content_type, content_lenght + additonal_lenght);
+	lenght = sprintf(request, post_request_template, host, content_type,
+	    content_lenght + additonal_lenght);
 
 	*request_lenght = content_lenght + lenght;
 
@@ -117,11 +118,9 @@ unpack_header(char *header, char **contest_id, char **prob_id)
 			*ptr = 0;
 			if (*contest_id == NULL) {
 				*contest_id = ptr + 1;
-			}
-			else if (*prob_id == NULL) {
+			} else if (*prob_id == NULL) {
 				*prob_id = ptr + 1;
-			}
-			else {
+			} else {
 				break;
 			}
 		}
@@ -129,7 +128,8 @@ unpack_header(char *header, char **contest_id, char **prob_id)
 }
 
 int
-unparse_json_field(const char *json, const char *name, enum type type, void *value)
+unparse_json_field(const char *json, const char *name, enum type type,
+    void *value)
 {
 	/* NOTE: Not unparse string with '"'. */
 	size_t distanse = 0;
@@ -144,7 +144,8 @@ unparse_json_field(const char *json, const char *name, enum type type, void *val
 
 	switch (type) {
 	case BOOL:
-		while (isalpha(*ptr) == 0 && *ptr++);
+		while (isalpha(*ptr) == 0 && *ptr++)
+			;
 		if (*ptr == 0)
 			goto failure;
 
@@ -163,19 +164,21 @@ unparse_json_field(const char *json, const char *name, enum type type, void *val
 		snprintf(value, distanse + 1, "%s", ptr);
 		break;
 	case INT:
-		while (isdigit(*ptr) == 0 && *ptr++);
+		while (isdigit(*ptr) == 0 && *ptr++)
+			;
 		if (*ptr == 0)
 			goto failure;
 		sscanf(ptr, "%d", (int *)value);
 		break;
 	case UINT:
-		while (isdigit(*ptr) == 0 && *ptr++);
+		while (isdigit(*ptr) == 0 && *ptr++)
+			;
 		if (*ptr == 0)
 			goto failure;
 		sscanf(ptr, "%u", (unsigned int *)value);
 		break;
 	default:
-		fprintf(stderr, "unparse_json_field: Unclassifed type\n");	
+		fprintf(stderr, "unparse_json_field: Unclassifed type\n");
 	}
 
 	return 0;
@@ -185,8 +188,8 @@ failure:
 	return 1;
 }
 
-const char
-*get_problem_status_name(const enum problem_status status) 
+const char *
+get_problem_status_name(const enum problem_status status)
 {
 	switch (status) {
 	case OK:
