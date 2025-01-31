@@ -44,16 +44,16 @@ tls_safe_write(struct tls *ctx, const void *buf, size_t len)
 
 void
 make_post_request(char *request, ssize_t *request_lenght, const char *host,
-    const char *content_type, const size_t additonal_lenght,
-    const char *data_format, ...)
+	const char *content_type, const size_t additonal_lenght,
+	const char *data_format, ...)
 {
 	static const char post_request_template[] =
-	    "POST /cgi-bin/new-client HTTP/1.1\r\n"
-	    "Host: %s\r\n"
-	    "Conncetion: keep-alive\r\n"
-	    "Content-Type: %s\r\n"
-	    "Content-Length: %lu\r\n"
-	    "\r\n";
+		"POST /cgi-bin/new-client HTTP/1.1\r\n"
+		"Host: %s\r\n"
+		"Conncetion: keep-alive\r\n"
+		"Content-Type: %s\r\n"
+		"Content-Length: %lu\r\n"
+		"\r\n";
 
 	size_t content_lenght, lenght;
 	char *arg, *write_ptr;
@@ -78,13 +78,12 @@ make_post_request(char *request, ssize_t *request_lenght, const char *host,
 		case '%':
 			continue;
 		default:
-			fprintf(stderr,
-			    "make_post_request: Unsuported format %%%c", *ptr);
+			fprintf(stderr, "make_post_request: Unsuported format %%%c", *ptr);
 		}
 	}
 
 	lenght = sprintf(request, post_request_template, host, content_type,
-	    content_lenght + additonal_lenght);
+		content_lenght + additonal_lenght);
 
 	*request_lenght = content_lenght + lenght;
 
@@ -129,7 +128,7 @@ unpack_header(char *header, char **contest_id, char **prob_id)
 
 int
 unparse_json_field(const char *json, const char *name, enum type type,
-    void *value)
+	void *value)
 {
 	/* NOTE: Not unparse string with '"'. */
 	size_t distanse = 0;

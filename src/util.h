@@ -3,7 +3,7 @@
  */
 #include <stdio.h>
 
-#define GET_REQUEST_TEMPLATE(args)                                             \
+#define GET_REQUEST_TEMPLATE(args)                                         \
 	"GET /cgi-bin/new-client?json=1&SID=%s&EJSID=%s&" args " HTTP/1.1\r\n" \
 	"Host: %s\r\n"                                                         \
 	"Connection: keep-alive\r\n"                                           \
@@ -42,7 +42,7 @@ ssize_t tls_safe_read(struct tls *, void *, size_t);
 ssize_t tls_safe_write(struct tls *, const void *, size_t);
 
 void make_post_request(char *, ssize_t *, const char *, const char *,
-    const size_t, const char *, ...);
+	const size_t, const char *, ...);
 void unpack_header(char *, char **, char **);
 int unparse_json_field(const char *, const char *, enum type, void *);
 

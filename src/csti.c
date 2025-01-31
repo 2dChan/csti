@@ -18,7 +18,7 @@
 #include "networking.h"
 
 #define HEADER_SIZE 10
-#define BUF_SIZE    1024
+#define BUF_SIZE	1024
 
 static int apply_pre_send_actions(const char *);
 static char *get_file_header(const char *);
@@ -32,10 +32,9 @@ apply_pre_send_actions(const char *path)
 {
 	char command[BUF_SIZE], *write_ptr;
 	const char path_word[] = "path", *ptr;
-	const size_t lenght = sizeof(pre_send_actions) /
-	    sizeof(*pre_send_actions),
-		     path_lenght = strlen(path),
-		     path_word_lenght = sizeof(path_word) - 1;
+	const size_t lenght = sizeof(pre_send_actions) / sizeof(*pre_send_actions),
+				 path_lenght = strlen(path),
+				 path_word_lenght = sizeof(path_word) - 1;
 	size_t i;
 	int status;
 
@@ -58,9 +57,8 @@ apply_pre_send_actions(const char *path)
 			return 1;
 		}
 		if (WIFEXITED(status) == 0 || WEXITSTATUS(status) != 0) {
-			fprintf(stderr,
-			    "apply_pre_send_action: Action %s failed\n",
-			    command);
+			fprintf(stderr, "apply_pre_send_action: Action %s failed\n",
+				command);
 			return 1;
 		}
 	}
@@ -110,8 +108,7 @@ get_last_modify_file(const char *dir_path, char *file_path, time_t *file_mtime)
 	}
 
 	while ((entry = readdir(dir))) {
-		if (strcmp(entry->d_name, "..") == 0 ||
-		    strcmp(entry->d_name, ".") == 0)
+		if (strcmp(entry->d_name, "..") == 0 || strcmp(entry->d_name, ".") == 0)
 			continue;
 
 		snprintf(path, sizeof(path), "%s/%s", dir_path, entry->d_name);
@@ -125,7 +122,7 @@ get_last_modify_file(const char *dir_path, char *file_path, time_t *file_mtime)
 				exit(EXIT_FAILURE);
 			}
 			if (file_stat.st_mtime >= *file_mtime &&
-			    fnmatch(file_pattern, entry->d_name, 0) == 0) {
+				fnmatch(file_pattern, entry->d_name, 0) == 0) {
 				*file_mtime = file_stat.st_mtime;
 				strcpy(file_path, path);
 			}
