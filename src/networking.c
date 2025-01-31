@@ -195,7 +195,7 @@ get_problem_runs(struct problem_run *runs, unsigned int n, struct tls *ctx,
 			if (lenght + 1 == BUFFER_SIZE) {
 				lenght = tls_safe_read(ctx, buffer, BUFFER_SIZE);
 				if (lenght == -1)
-					return -2;
+					return -1;
 				buffer[lenght] = 0;
 			} else
 				break;
@@ -254,8 +254,8 @@ print_status_run(const char *host, const char *login, const char *password,
 	lenght = get_problem_runs(&problem_run, 1, ctx, host, sid, ejsid, prob_id);
 	if (lenght == -1)
 		exit(EXIT_FAILURE);
-	if (lenght == -2) {
-		printf("No solutions found");
+	if (lenght == 0) {
+		printf("No solutions found\n");
 		return;
 	}
 

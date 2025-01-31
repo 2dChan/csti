@@ -17,7 +17,7 @@
 #include "config.h"
 #include "networking.h"
 
-#define HEADER_SIZE 10
+#define HEADER_SIZE 20
 #define BUF_SIZE	1024
 
 static int apply_pre_send_actions(const char *);
