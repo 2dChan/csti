@@ -77,31 +77,10 @@ make_post_request(char *request, const char *host, const char *content_type,
 	return lenght;
 }
 
-void
-unpack_header(char *header, char **contest_id, char **prob_id)
-{
-	char *ptr;
-
-	*contest_id = NULL, *prob_id = NULL;
-	for (ptr = header; *ptr != 0; ++ptr) {
-		if (isspace(*ptr) || *ptr == '-') {
-			*ptr = 0;
-			if (*contest_id == NULL) {
-				*contest_id = ptr + 1;
-			} else if (*prob_id == NULL) {
-				*prob_id = ptr + 1;
-			} else {
-				break;
-			}
-		}
-	}
-}
-
 int
 unparse_json_field(const char *json, const char *name, enum type type,
 	void *value)
 {
-	/* NOTE: Not unparse string with '"'. */
 	size_t distanse = 0;
 	char *ptr, *ptr1;
 
@@ -156,49 +135,4 @@ unparse_json_field(const char *json, const char *name, enum type type,
 failure:
 	fprintf(stderr, "unparse_json_field: Json parsing error\n");
 	return 1;
-}
-
-const char *
-get_problem_status_name(const enum problem_status status)
-{
-	switch (status) {
-	case OK:
-		return "Ok";
-	case COMPILATION_ERROR:
-		return "Compilation error";
-	case RUN_TIME_ERROR:
-		return "Run-time error";
-	case TIME_LIMIT_EXCEEDED:
-		return "Time-limit exceeded";
-	case PRESENTATION_ERROR:
-		return "Presentation error";
-	case WRONG_ANSWER:
-		return "Wrong answer";
-	case CHECK_FAILED:
-		return "Check failed";
-	case PARITIAL_SOLUTION:
-		return "Partial solution";
-	case ACCEPTED_FOR_TESTING:
-		return "Accepted for testing";
-	case IGNORED:
-		return "Ignored";
-	case DISQUALIFIED:
-		return "Disqualified";
-	case PENDING_CHECK:
-		return "Pending check";
-	case MEMORY_LIMIT_EXCEEDED:
-		return "Memory limit exceeded";
-	case SECURITY_VIOLATION:
-		return "Security violation";
-	case CODING_STYLE_VIOLATION:
-		return "Coding style violation";
-	case WALL_TIME_LIMIT_EXCEEDED:
-		return "Wall time-limit exceeded";
-	case PENDING_REVIEW:
-		return "Pending review";
-	case REJECTED:
-		return "Rejected";
-	default:
-		return "Unknown";
-	}
 }

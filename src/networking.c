@@ -3,7 +3,9 @@
  */
 #include <sys/stat.h>
 
+#include <ctype.h>
 #include <fcntl.h>
+#include <regex.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,6 +18,27 @@
 #define BUFFER_SIZE	   4096
 #define SID_LENGHT	   17
 #define MESSAGE_LENGHT 100
+
+enum problem_status {
+	OK = 0,
+	COMPILATION_ERROR = 1,
+	RUN_TIME_ERROR = 2,
+	TIME_LIMIT_EXCEEDED = 3,
+	PRESENTATION_ERROR = 4,
+	WRONG_ANSWER = 5,
+	CHECK_FAILED = 6,
+	PARITIAL_SOLUTION = 7,
+	ACCEPTED_FOR_TESTING = 8,
+	IGNORED = 9,
+	DISQUALIFIED = 10,
+	PENDING_CHECK = 11,
+	MEMORY_LIMIT_EXCEEDED = 12,
+	SECURITY_VIOLATION = 13,
+	CODING_STYLE_VIOLATION = 14,
+	WALL_TIME_LIMIT_EXCEEDED = 15,
+	PENDING_REVIEW = 16,
+	REJECTED = 17,
+};
 
 struct problem_run {
 	unsigned int id;
@@ -36,6 +59,8 @@ static int get_problem_info(struct problem_info *, struct tls *, const char *,
 	const char *, const char *, const char *);
 static int get_problem_runs(struct problem_run *, unsigned int, struct tls *,
 	const char *, const char *, const char *, const char *);
+static const char *problem_status_to_str(const enum problem_status);
+static int unpack_header(char *, char **, char **);
 
 int
 auth(struct tls *ctx, const char *host, const char *login, const char *password,
@@ -144,7 +169,7 @@ get_problem_info(struct problem_info *problem_info, struct tls *ctx,
 		return 1;
 	}
 	/* NOTE: Unparse array as INT maybe not stable, and get only first num. */
-	if (unparse_json_field(buffer, "compilers", INT, &problem_info->lang_id))
+	if (unparse_json_field(buffer, "compilers", UINT, &problem_info->lang_id))
 		return 1;
 
 	// Clear socket fd.
@@ -229,6 +254,84 @@ get_problem_runs(struct problem_run *runs, unsigned int n, struct tls *ctx,
 	return i;
 }
 
+const char *
+problem_status_to_str(const enum problem_status status)
+{
+	switch (status) {
+	case OK:
+		return "Ok";
+	case COMPILATION_ERROR:
+		return "Compilation error";
+	case RUN_TIME_ERROR:
+		return "Run-time error";
+	case TIME_LIMIT_EXCEEDED:
+		return "Time-limit exceeded";
+	case PRESENTATION_ERROR:
+		return "Presentation error";
+	case WRONG_ANSWER:
+		return "Wrong answer";
+	case CHECK_FAILED:
+		return "Check failed";
+	case PARITIAL_SOLUTION:
+		return "Partial solution";
+	case ACCEPTED_FOR_TESTING:
+		return "Accepted for testing";
+	case IGNORED:
+		return "Ignored";
+	case DISQUALIFIED:
+		return "Disqualified";
+	case PENDING_CHECK:
+		return "Pending check";
+	case MEMORY_LIMIT_EXCEEDED:
+		return "Memory limit exceeded";
+	case SECURITY_VIOLATION:
+		return "Security violation";
+	case CODING_STYLE_VIOLATION:
+		return "Coding style violation";
+	case WALL_TIME_LIMIT_EXCEEDED:
+		return "Wall time-limit exceeded";
+	case PENDING_REVIEW:
+		return "Pending review";
+	case REJECTED:
+		return "Rejected";
+	default:
+		return "Unknown";
+	}
+}
+
+int
+unpack_header(char *header, char **contest_id, char **prob_id)
+{
+	char message[MESSAGE_LENGHT];
+	regmatch_t matches[3];
+	regex_t regex;
+	int value;
+
+	value = regcomp(&regex, header_pattern, REG_EXTENDED);
+	if (value != 0)
+		goto re_failure;
+	value = regexec(&regex, header, 3, matches, 0);
+	switch (value) {
+	case 0:
+		*contest_id = header + matches[1].rm_so;
+		*prob_id = header + matches[2].rm_so;
+		header[matches[1].rm_eo] = 0;
+		header[matches[2].rm_eo] = 0;
+		return 0;
+	case REG_NOMATCH:
+		goto failure;
+	default:
+		goto re_failure;
+	}
+
+re_failure:
+	regerror(value, &regex, message, sizeof(message));
+	fprintf(stderr, "regex: %s\n", message);
+failure:
+	regfree(&regex);
+	return 1;
+}
+
 void
 print_status_run(const char *host, const char *login, const char *password,
 	char *header)
@@ -239,11 +342,8 @@ print_status_run(const char *host, const char *login, const char *password,
 	struct tls *ctx;
 	ssize_t lenght;
 
-	unpack_header(header, &contest_id, &prob_id);
-	if (contest_id == NULL || prob_id == NULL) {
-		fprintf(stderr, "unpack_header: Header presentation error\n");
+	if (unpack_header(header, &contest_id, &prob_id))
 		exit(EXIT_FAILURE);
-	}
 
 	ctx = connect(host);
 	if (ctx == NULL)
@@ -259,7 +359,7 @@ print_status_run(const char *host, const char *login, const char *password,
 		return;
 	}
 
-	status = get_problem_status_name(problem_run.status);
+	status = problem_status_to_str(problem_run.status);
 	printf("Prob id |Run id |%-*s |Tests |Score \n"
 		   "%-8u|%-7u|%-6s |%-6u|%-6u\n",
 		(int)strlen(status), "Status", problem_run.prob_id, problem_run.id,
@@ -283,11 +383,8 @@ submit_run(const char *host, const char *login, const char *password,
 	ssize_t lenght;
 	int fd, is_ok;
 
-	unpack_header(header, &contest_id, &prob_id);
-	if (contest_id == NULL || prob_id == NULL) {
-		fprintf(stderr, "unpack_header: Header presentation error\n");
+	if (unpack_header(header, &contest_id, &prob_id))
 		return 1;
-	}
 
 	/* Connect. */
 	ctx = connect(host);
@@ -298,7 +395,7 @@ submit_run(const char *host, const char *login, const char *password,
 
 	/* Send. */
 	if (get_problem_info(&info, ctx, host, sid, ejsid, prob_id)) {
-		return 1;
+		goto failure;
 	}
 
 	if (stat(path, &fstat) == -1)

@@ -95,7 +95,10 @@ get_file_header(const char *file_path)
 void
 get_last_modify_file(const char *dir_path, char *file_path, time_t *file_mtime)
 {
-	/* TODO: Add file header checker. */
+	/* TODO:
+	 * 1) Rewrite to iterative.
+	 * 2) Add file header checker.
+	 */
 	char path[PATH_MAX];
 	struct stat file_stat;
 	struct dirent *entry;
