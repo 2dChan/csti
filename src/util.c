@@ -45,16 +45,17 @@ tls_safe_write(struct tls *ctx, const void *buf, size_t len)
 }
 
 ssize_t
-make_post_request(char *request, const char *host, const char *content_type,
-	const size_t additonal_lenght, const char *data_format, ...)
+make_post_request(char *request, const char *uri, const char *host,
+	const char *content_type, const size_t additonal_lenght,
+	const char *data_format, ...)
 {
-	static const char template[] = "POST /cgi-bin/new-client HTTP/1.1\r\n"
-								   "Host: %s\r\n"
-								   "Conncetion: keep-alive\r\n"
-								   "Content-Type: %s\r\n"
-								   "Content-Length: %lu\r\n"
-								   "\r\n"
-								   "%s";
+	static const char t[] = "POST %s HTTP/1.1\r\n"
+							"Host: %s\r\n"
+							"Conncetion: keep-alive\r\n"
+							"Content-Type: %s\r\n"
+							"Content-Length: %lu\r\n"
+							"\r\n"
+							"%s";
 
 	char content[BUFFER_SIZE];
 	ssize_t lenght;
@@ -67,7 +68,7 @@ make_post_request(char *request, const char *host, const char *content_type,
 		return -1;
 	}
 
-	lenght = sprintf(request, template, host, content_type,
+	lenght = sprintf(request, t, uri, host, content_type,
 		lenght + additonal_lenght, content);
 	if (lenght < 0) {
 		perror("spinrtf");

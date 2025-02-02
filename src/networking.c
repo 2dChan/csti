@@ -3,7 +3,6 @@
  */
 #include <sys/stat.h>
 
-#include <ctype.h>
 #include <fcntl.h>
 #include <regex.h>
 #include <stdio.h>
@@ -15,9 +14,11 @@
 #include "networking.h"
 #include "util.h"
 
-#define BUFFER_SIZE	   4096
+#define BUF_SIZE	   4096
 #define SID_LENGHT	   17
 #define MESSAGE_LENGHT 100
+
+#define URI			   "/cgi-bin/new-client"
 
 enum problem_status {
 	OK = 0,
@@ -64,47 +65,44 @@ static int unpack_header(char *, char **, char **);
 
 int
 auth(struct tls *ctx, const char *host, const char *login, const char *password,
-	const char *contest_id, char *sid, char *ejsid)
+	const char *contest, char *sid, char *ejsid)
 {
 	static const char
-		content_type[] = "application/x-www-form-urlencoded",
-		data_template[] =
-			"action=login-json&login=%s&password=%s&contest_id=%s&json=1";
+		ct[] = "application/x-www-form-urlencoded",
+		dt[] = "action=login-json&login=%s&password=%s&contest_id=%s&json=1";
 
-	char buffer[BUFFER_SIZE], message[MESSAGE_LENGHT];
-	ssize_t lenght = 0;
-	int is_ok;
+	char buf[BUF_SIZE], msg[MESSAGE_LENGHT];
+	ssize_t l = 0;
+	int ok;
 
-	lenght = make_post_request(buffer, host, content_type, 0, data_template,
-		login, password, contest_id);
-	if (lenght > sizeof(buffer) || lenght == -1) {
-		fprintf(stderr, "make_post_request error: Lenght %ld", lenght);
+	l = make_post_request(buf, URI, host, ct, 0, dt, login, password, contest);
+	if (l > sizeof(buf) || l == -1) {
+		fprintf(stderr, "make_post_request: Lenght %ld/%ld", l, sizeof(buf));
 		return 1;
 	}
-	if (tls_safe_write(ctx, buffer, lenght) == -1)
+	if (tls_safe_write(ctx, buf, l) == -1)
 		return 1;
 
-	lenght = tls_safe_read(ctx, buffer, sizeof(buffer) - 1);
-	if (lenght == -1)
+	l = tls_safe_read(ctx, buf, sizeof(buf) - 1);
+	if (l == -1)
 		return 1;
-	buffer[lenght] = 0;
+	buf[l] = 0;
 
-	if (unparse_json_field(buffer, "ok", BOOL, &is_ok))
+	if (unparse_json_field(buf, "ok", BOOL, &ok))
 		return 1;
-	if (is_ok == 0) {
-		if (unparse_json_field(buffer, "message", STRING, &message))
+	if (ok == 0) {
+		if (unparse_json_field(buf, "message", STRING, &msg))
 			return 1;
-		fprintf(stderr, "ejudge error: %s\n", message);
+		fprintf(stderr, "ejudge error: %s\n", msg);
 		return 1;
 	}
-	if (unparse_json_field(buffer, "SID", STRING, sid) ||
-		unparse_json_field(buffer, "EJSID", STRING, ejsid))
+	if (unparse_json_field(buf, "SID", STRING, sid) ||
+		unparse_json_field(buf, "EJSID", STRING, ejsid))
 		return 1;
 
-	// Clear socket fd.
-	while (lenght + 1 == BUFFER_SIZE && lenght != 0) {
-		lenght = tls_safe_read(ctx, buffer, BUFFER_SIZE);
-		if (lenght == -1)
+	while (l + 1 == BUF_SIZE && l != 0) {
+		l = tls_safe_read(ctx, buf, BUF_SIZE);
+		if (l == -1)
 			return -1;
 	}
 	return 0;
@@ -113,12 +111,12 @@ auth(struct tls *ctx, const char *host, const char *login, const char *password,
 struct tls *
 connect(const char *host)
 {
-	struct tls_config *config;
+	struct tls_config *cfg;
 	struct tls *ctx;
 
-	config = tls_config_new();
-	if (config == NULL) {
-		printf("tls_config_new: %s\n", tls_config_error(config));
+	cfg = tls_config_new();
+	if (cfg == NULL) {
+		printf("tls_config_new: %s\n", tls_config_error(cfg));
 		return NULL;
 	}
 	ctx = tls_client();
@@ -126,7 +124,7 @@ connect(const char *host)
 		printf("tls_client: %s\n", tls_error(ctx));
 		return NULL;
 	}
-	if (tls_configure(ctx, config) == -1) {
+	if (tls_configure(ctx, cfg) == -1) {
 		printf("tls_configure: %s\n", tls_error(ctx));
 		return NULL;
 	}
@@ -139,43 +137,42 @@ connect(const char *host)
 }
 
 int
-get_problem_info(struct problem_info *problem_info, struct tls *ctx,
-	const char *host, const char *sid, const char *ejsid, const char *problem)
+get_problem_info(struct problem_info *pi, struct tls *ctx, const char *host,
+	const char *sid, const char *ejsid, const char *problem)
 {
-	static const char problem_runs_request[] = GET_REQUEST_TEMPLATE(
+	static const char rt[] = GET_REQUEST_TEMPLATE(
 		"action=problem-status-json&problem=%s");
 
-	char buffer[BUFFER_SIZE], message[MESSAGE_LENGHT];
-	size_t lenght;
-	int is_ok;
+	char buf[BUF_SIZE], msg[MESSAGE_LENGHT];
+	size_t l;
+	int ok;
 
-	lenght = sprintf(buffer, problem_runs_request, sid, ejsid, problem, host);
-	if (lenght > sizeof(buffer))
+	l = sprintf(buf, rt, sid, ejsid, problem, host);
+	if (l > sizeof(buf))
 		return 1;
-	if (tls_safe_write(ctx, buffer, lenght) == -1)
+	if (tls_safe_write(ctx, buf, l) == -1)
 		return 1;
 
-	lenght = tls_safe_read(ctx, buffer, sizeof(buffer) - 1);
-	if (lenght == -1)
+	l = tls_safe_read(ctx, buf, sizeof(buf) - 1);
+	if (l == -1)
 		return 1;
-	buffer[lenght] = 0;
+	buf[l] = 0;
 
-	if (unparse_json_field(buffer, "ok", BOOL, &is_ok))
+	if (unparse_json_field(buf, "ok", BOOL, &ok))
 		return 1;
-	if (is_ok == 0) {
-		if (unparse_json_field(buffer, "message", STRING, &message))
+	if (ok == 0) {
+		if (unparse_json_field(buf, "message", STRING, &msg))
 			return 1;
-		fprintf(stderr, "ejudge error: %s\n", message);
+		fprintf(stderr, "ejudge error: %s\n", msg);
 		return 1;
 	}
 	/* NOTE: Unparse array as INT maybe not stable, and get only first num. */
-	if (unparse_json_field(buffer, "compilers", UINT, &problem_info->lang_id))
+	if (unparse_json_field(buf, "compilers", UINT, &pi->lang_id))
 		return 1;
 
-	// Clear socket fd.
-	while (lenght + 1 == BUFFER_SIZE && lenght != 0) {
-		lenght = tls_safe_read(ctx, buffer, BUFFER_SIZE);
-		if (lenght == -1)
+	while (l + 1 == BUF_SIZE && l != 0) {
+		l = tls_safe_read(ctx, buf, BUF_SIZE);
+		if (l == -1)
 			return -1;
 	}
 
@@ -186,56 +183,56 @@ int
 get_problem_runs(struct problem_run *runs, unsigned int n, struct tls *ctx,
 	const char *host, const char *sid, const char *ejsid, const char *problem)
 {
-	static const char problem_runs_request[] = GET_REQUEST_TEMPLATE(
+	static const char rt[] = GET_REQUEST_TEMPLATE(
 		"action=list-runs-json&prob_id=%s");
 
-	char buffer[BUFFER_SIZE], message[MESSAGE_LENGHT];
-	size_t lenght, i;
-	int is_ok, status;
+	char buf[BUF_SIZE], msg[MESSAGE_LENGHT];
+	size_t l, i;
+	int ok, status;
 
-	lenght = sprintf(buffer, problem_runs_request, sid, ejsid, problem, host);
-	if (lenght > sizeof(buffer)) {
+	l = sprintf(buf, rt, sid, ejsid, problem, host);
+	if (l > sizeof(buf) || l == -1) {
 		return -1;
 	}
-	if (tls_safe_write(ctx, buffer, lenght) == -1) {
+	if (tls_safe_write(ctx, buf, l) == -1) {
 		return -1;
 	}
 
-	lenght = tls_safe_read(ctx, buffer, sizeof(buffer) - 1);
-	if (lenght == -1)
+	l = tls_safe_read(ctx, buf, sizeof(buf) - 1);
+	if (l == -1)
 		return -1;
-	buffer[lenght] = 0;
+	buf[l] = 0;
 
-	if (unparse_json_field(buffer, "ok", BOOL, &is_ok))
+	if (unparse_json_field(buf, "ok", BOOL, &ok))
 		return -1;
-	if (is_ok == 0) {
-		if (unparse_json_field(buffer, "message", STRING, &message))
+	if (ok == 0) {
+		if (unparse_json_field(buf, "message", STRING, &msg))
 			return -1;
-		fprintf(stderr, "ejudge error: %s\n", message);
+		fprintf(stderr, "ejudge error: %s\n", msg);
 		return -1;
 	}
 	for (i = 0; i < n; ++i) {
-		status = unparse_json_field(buffer, "run_id", UINT, &runs[i].id);
+		status = unparse_json_field(buf, "run_id", UINT, &runs[i].id);
+		// TODO: Refactor after rewrite get response.
 		if (status == 2) {
-			if (lenght + 1 == BUFFER_SIZE) {
-				lenght = tls_safe_read(ctx, buffer, BUFFER_SIZE);
-				if (lenght == -1)
+			if (l + 1 == BUF_SIZE) {
+				l = tls_safe_read(ctx, buf, BUF_SIZE);
+				if (l == -1)
 					return -1;
-				buffer[lenght] = 0;
+				buf[l] = 0;
 			} else
 				break;
 		}
 
 		if (status ||
-			unparse_json_field(buffer, "prob_id", UINT, &runs[i].prob_id) ||
-			unparse_json_field(buffer, "status", UINT, &runs[i].status)) {
+			unparse_json_field(buf, "prob_id", UINT, &runs[i].prob_id) ||
+			unparse_json_field(buf, "status", UINT, &runs[i].status)) {
 			return -1;
 		}
 		if (runs[i].status == PARITIAL_SOLUTION || runs[i].status == OK) {
-			if (unparse_json_field(buffer, "passed_tests", UINT,
+			if (unparse_json_field(buf, "passed_tests", UINT,
 					&runs[i].passed_tests) == 1 ||
-				unparse_json_field(buffer, "score", UINT, &runs[i].score) ==
-					1) {
+				unparse_json_field(buf, "score", UINT, &runs[i].score) == 1) {
 				return -1;
 			}
 		} else {
@@ -244,10 +241,9 @@ get_problem_runs(struct problem_run *runs, unsigned int n, struct tls *ctx,
 		}
 	}
 
-	// Clear socket fd.
-	while (lenght + 1 == BUFFER_SIZE && lenght != 0) {
-		lenght = tls_safe_read(ctx, buffer, BUFFER_SIZE);
-		if (lenght == -1)
+	while (l + 1 == BUF_SIZE && l != 0) {
+		l = tls_safe_read(ctx, buf, BUF_SIZE);
+		if (l == -1)
 			return -1;
 	}
 
@@ -255,9 +251,9 @@ get_problem_runs(struct problem_run *runs, unsigned int n, struct tls *ctx,
 }
 
 const char *
-problem_status_to_str(const enum problem_status status)
+problem_status_to_str(const enum problem_status s)
 {
-	switch (status) {
+	switch (s) {
 	case OK:
 		return "Ok";
 	case COMPILATION_ERROR:
@@ -302,21 +298,21 @@ problem_status_to_str(const enum problem_status status)
 int
 unpack_header(char *header, char **contest_id, char **prob_id)
 {
-	char message[MESSAGE_LENGHT];
-	regmatch_t matches[3];
-	regex_t regex;
-	int value;
+	char msg[MESSAGE_LENGHT];
+	regmatch_t m[3];
+	regex_t r;
+	int val;
 
-	value = regcomp(&regex, header_pattern, REG_EXTENDED);
-	if (value != 0)
+	val = regcomp(&r, header_pattern, REG_EXTENDED);
+	if (val != 0)
 		goto re_failure;
-	value = regexec(&regex, header, 3, matches, 0);
-	switch (value) {
+	val = regexec(&r, header, 3, m, 0);
+	switch (val) {
 	case 0:
-		*contest_id = header + matches[1].rm_so;
-		*prob_id = header + matches[2].rm_so;
-		header[matches[1].rm_eo] = 0;
-		header[matches[2].rm_eo] = 0;
+		*contest_id = header + m[1].rm_so;
+		*prob_id = header + m[2].rm_so;
+		header[m[1].rm_eo] = 0;
+		header[m[2].rm_eo] = 0;
 		return 0;
 	case REG_NOMATCH:
 		goto failure;
@@ -325,10 +321,10 @@ unpack_header(char *header, char **contest_id, char **prob_id)
 	}
 
 re_failure:
-	regerror(value, &regex, message, sizeof(message));
-	fprintf(stderr, "regex: %s\n", message);
+	regerror(val, &r, msg, sizeof(msg));
+	fprintf(stderr, "regex: %s\n", msg);
 failure:
-	regfree(&regex);
+	regfree(&r);
 	return 1;
 }
 
@@ -338,7 +334,7 @@ print_status_run(const char *host, const char *login, const char *password,
 {
 	char sid[SID_LENGHT], ejsid[SID_LENGHT], *contest_id, *prob_id;
 	const char *status;
-	struct problem_run problem_run;
+	struct problem_run pr;
 	struct tls *ctx;
 	ssize_t lenght;
 
@@ -351,7 +347,7 @@ print_status_run(const char *host, const char *login, const char *password,
 	if (auth(ctx, host, login, password, contest_id, sid, ejsid))
 		exit(EXIT_FAILURE);
 
-	lenght = get_problem_runs(&problem_run, 1, ctx, host, sid, ejsid, prob_id);
+	lenght = get_problem_runs(&pr, 1, ctx, host, sid, ejsid, prob_id);
 	if (lenght == -1)
 		exit(EXIT_FAILURE);
 	if (lenght == 0) {
@@ -359,54 +355,50 @@ print_status_run(const char *host, const char *login, const char *password,
 		return;
 	}
 
-	status = problem_status_to_str(problem_run.status);
-	printf("Prob id |Run id |%-*s |Tests |Score \n"
-		   "%-8u|%-7u|%-6s |%-6u|%-6u\n",
-		(int)strlen(status), "Status", problem_run.prob_id, problem_run.id,
-		status, problem_run.passed_tests, problem_run.score);
+	status = problem_status_to_str(pr.status);
+	printf("Prob id |Run id |%-*s |Tests |Score \n%-8u|%-7u|%-6s |%-6u|%-6u\n",
+		(int)strlen(status), "Status", pr.prob_id, pr.id, status,
+		pr.passed_tests, pr.score);
 }
 
 int
 submit_run(const char *host, const char *login, const char *password,
 	const char *path, char *header)
 {
-	static const char
-		content_type[] = "multipart/form-data",
-		data_template[] =
-			"action=submit-run&json=1&SID=%s&EJSID=%s&prob_id=%s&lang_id=%u&file=";
+	static const char ct[] = "multipart/form-data",
+					  dt[] = "action=submit-run&json=1&SID=%s&EJSID=%s"
+							 "&prob_id=%s&lang_id=%u&file=";
 
-	char buffer[BUFFER_SIZE], message[MESSAGE_LENGHT], sid[SID_LENGHT],
-		ejsid[SID_LENGHT], *contest_id, *prob_id;
-	struct problem_info info;
-	struct stat fstat;
+	char buf[BUF_SIZE], msg[MESSAGE_LENGHT], sid[SID_LENGHT], ejsid[SID_LENGHT],
+		*contest_id, *prob_id;
+	struct problem_info pi;
+	struct stat s;
 	struct tls *ctx;
-	ssize_t lenght;
-	int fd, is_ok;
+	ssize_t l;
+	int fd, ok;
 
 	if (unpack_header(header, &contest_id, &prob_id))
 		return 1;
 
-	/* Connect. */
 	ctx = connect(host);
 	if (ctx == NULL)
 		return 1;
 	if (auth(ctx, host, login, password, contest_id, sid, ejsid))
 		goto failure;
 
-	/* Send. */
-	if (get_problem_info(&info, ctx, host, sid, ejsid, prob_id)) {
+	if (get_problem_info(&pi, ctx, host, sid, ejsid, prob_id)) {
 		goto failure;
 	}
 
-	if (stat(path, &fstat) == -1)
+	if (stat(path, &s) == -1)
 		goto failure;
-	lenght = make_post_request(buffer, host, content_type, fstat.st_size,
-		data_template, sid, ejsid, prob_id, info.lang_id);
-	if (lenght > sizeof(buffer) || lenght == -1) {
-		fprintf(stderr, "make_post_request error: Lenght %ld", lenght);
+	l = make_post_request(buf, URI, host, ct, s.st_size, dt, sid, ejsid,
+		prob_id, pi.lang_id);
+	if (l > sizeof(buf) || l == -1) {
+		fprintf(stderr, "make_post_request error: Lenght %ld", l);
 		goto failure;
 	}
-	if (tls_safe_write(ctx, buffer, lenght) == -1) {
+	if (tls_safe_write(ctx, buf, l) == -1) {
 		goto failure;
 	}
 
@@ -415,31 +407,30 @@ submit_run(const char *host, const char *login, const char *password,
 		perror("open");
 		goto failure;
 	}
-	while ((lenght = read(fd, buffer, sizeof(buffer))) != 0) {
-		if (tls_safe_write(ctx, buffer, lenght) == -1) {
+	while ((l = read(fd, buf, sizeof(buf))) != 0) {
+		if (tls_safe_write(ctx, buf, l) == -1) {
 			close(fd);
 			goto failure;
 		}
 	}
 	close(fd);
 
-	/* Recv. */
-	lenght = tls_safe_read(ctx, buffer, sizeof(buffer) - 1);
-	if (lenght == -1)
+	l = tls_safe_read(ctx, buf, sizeof(buf) - 1);
+	if (l == -1)
 		goto failure;
-	buffer[lenght] = 0;
+	buf[l] = 0;
 
-	if (unparse_json_field(buffer, "ok", BOOL, &is_ok))
+	if (unparse_json_field(buf, "ok", BOOL, &ok))
 		goto failure;
-	if (is_ok == 0) {
-		if (unparse_json_field(buffer, "message", STRING, &message))
+	if (ok == 0) {
+		if (unparse_json_field(buf, "message", STRING, &msg))
 			goto failure;
-		fprintf(stderr, "ejudge error: %s\n", message);
+		fprintf(stderr, "ejudge error: %s\n", msg);
 		goto failure;
 	}
 
 	/* TODO: Unwrap request. */
-	puts(buffer);
+	puts(buf);
 
 	tls_close(ctx);
 	tls_free(ctx);
