@@ -315,7 +315,8 @@ unpack_header(char *header, char **contest_id, char **prob_id)
 		header[m[2].rm_eo] = 0;
 		return 0;
 	case REG_NOMATCH:
-		goto failure;
+		// TODO: Earlie was failure, fix error handling.
+		goto re_failure;
 	default:
 		goto re_failure;
 	}
@@ -365,7 +366,7 @@ int
 submit_run(const char *host, const char *login, const char *password,
 	const char *path, char *header)
 {
-	static const char ct[] = "multipart/form-data",
+	static const char ct[] = "application/x-www-form-urlencoded",
 					  dt[] = "action=submit-run&json=1&SID=%s&EJSID=%s"
 							 "&prob_id=%s&lang_id=%u&file=";
 

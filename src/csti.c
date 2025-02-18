@@ -12,7 +12,6 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
-#include <wait.h>
 
 #include "config.h"
 #include "networking.h"
