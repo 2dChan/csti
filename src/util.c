@@ -51,7 +51,7 @@ make_post_request(char *request, const char *uri, const char *host,
 {
 	static const char t[] = "POST %s HTTP/1.1\r\n"
 							"Host: %s\r\n"
-							"Conncetion: keep-alive\r\n"
+							"Connection: keep-alive\r\n"
 							"Content-Type: %s\r\n"
 							"Content-Length: %lu\r\n"
 							"\r\n"
