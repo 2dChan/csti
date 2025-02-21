@@ -315,8 +315,8 @@ unpack_header(char *header, char **contest_id, char **prob_id)
 		header[m[2].rm_eo] = 0;
 		return 0;
 	case REG_NOMATCH:
-		// TODO: Earlie was failure, fix error handling.
-		goto re_failure;
+		fprintf(stderr, "File header not found\n");
+		goto failure;
 	default:
 		goto re_failure;
 	}
@@ -366,15 +366,17 @@ int
 submit_run(const char *host, const char *login, const char *password,
 	const char *path, char *header)
 {
-	static const char ct[] = "multipart/form-data; boundary=" BOUNDARY,
-					  dt[] = BODY_PART_TEMPLATE("action", "submit-run\r\n") 
-						     BODY_PART_TEMPLATE("json", "1\r\n")
-						     BODY_PART_TEMPLATE("SID", "%s\r\n")
-							 BODY_PART_TEMPLATE("EJSID", "%s\r\n")
-							 BODY_PART_TEMPLATE("prob_id", "%s\r\n")
-							 BODY_PART_TEMPLATE("lang_id", "%u\r\n")
-							 BODY_PART_TEMPLATE("file", ""),
-					  eb[] = "\r\n--" BOUNDARY "--\r\n";
+	static const char 
+		ct[] = "multipart/form-data; boundary=" BOUNDARY,
+		dt[] = BODY_PART("action", "submit-run") 
+		       BODY_PART("json", "1")
+		       BODY_PART("SID", "%s")
+			   BODY_PART("EJSID", "%s")
+			   BODY_PART("prob_id", "%s")
+			   BODY_PART("lang_id", "%u")
+			   BODY_PART_HEADER("file",
+		                        "Content-Type: text/plain;charset=UTF-8\r\n"),
+		eb[] = "\r\n--" BOUNDARY "--\r\n";
 
 	char buf[BUF_SIZE], msg[MESSAGE_LENGHT], sid[SID_LENGHT], ejsid[SID_LENGHT],
 		*contest_id, *prob_id;

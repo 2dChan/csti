@@ -5,15 +5,19 @@
 
 #define BOUNDARY "--CstiBoundaryR23cA9G3dD229"
 
-#define BODY_PART_TEMPLATE(name, value) \
-	"--" BOUNDARY "\r\n"                \
-	"Content-Disposition: form-data; name=\"" name "\"\r\n\r\n" value
+#define BODY_PART_HEADER(name, header) \
+	"--" BOUNDARY "\r\n"               \
+	"Content-Disposition: form-data; name=\"" name "\"\r\n" header "\r\n"
+
+#define BODY_PART(name, value) \
+	BODY_PART_HEADER(name, "") \
+	value "\r\n"
 
 #define GET_REQUEST_TEMPLATE(args)                                         \
 	"GET /cgi-bin/new-client?json=1&SID=%s&EJSID=%s&" args " HTTP/1.1\r\n" \
 	"Host: %s\r\n"                                                         \
 	"Connection: keep-alive\r\n"                                           \
-	"\r\n";
+	"\r\n"
 
 enum type {
 	BOOL,
