@@ -444,7 +444,7 @@ submit_run(const char *host, const char *login, const char *password,
 	/* TODO: Unwrap request. */
 	if (unparse_json_field(buf, "run_id", INT, &rid))
 		goto failure;
-	printf("Succesful submission.\nRun id: %d.\n", rid);
+	printf("Run id: %d\n", rid);
 
 	tls_close(ctx);
 	tls_free(ctx);
