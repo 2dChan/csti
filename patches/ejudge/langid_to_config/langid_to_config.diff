@@ -1,0 +1,156 @@
+From b0fc27caa35fa2e75d2fe317358d38c0ecfee218 Mon Sep 17 00:00:00 2001
+From: firefenix <kitotavrik.media@gmail.com>
+Date: Fri, 21 Feb 2025 12:49:04 +0300
+Subject: [PATCH] Manual setup lang_id
+
+---
+ src/config.def.h |  2 ++
+ src/csti.c       |  2 +-
+ src/networking.c | 58 ++----------------------------------------------
+ src/networking.h |  3 ++-
+ 4 files changed, 7 insertions(+), 58 deletions(-)
+
+diff --git a/src/config.def.h b/src/config.def.h
+index 9e7c62d..fd639e2 100644
+--- a/src/config.def.h
++++ b/src/config.def.h
+@@ -5,6 +5,8 @@ static const char password[] = "";
+ static const char file_pattern[] = "*"; /* "*" - wildcard.  */
+ static const char start_dir[] = ".";	/* "." - curret directory. */
+ 
++static const unsigned int lang_id = 3;
++
+ /*
+  * NOTE:
+  * 1) Replace "path" to file path.
+diff --git a/src/csti.c b/src/csti.c
+index 6d53851..05f1cbd 100644
+--- a/src/csti.c
++++ b/src/csti.c
+@@ -171,7 +171,7 @@ submit(void)
+ 	totemp(temp_path, fp);
+ 	if (apply_pre_send_actions(temp_path))
+ 		goto failure_exit;
+-	if (submit_run(host, login, password, temp_path, h))
++	if (submit_run(host, login, password, temp_path, h, lang_id))
+ 		goto failure_exit;
+ 
+ 	free(h);
+diff --git a/src/networking.c b/src/networking.c
+index 61efba9..6cf7b5e 100644
+--- a/src/networking.c
++++ b/src/networking.c
+@@ -49,15 +49,9 @@ struct problem_run {
+ 	unsigned int status;
+ };
+ 
+-struct problem_info {
+-	unsigned int lang_id;
+-};
+-
+ static int auth(struct tls *, const char *, const char *, const char *,
+ 	const char *, char *, char *);
+ static struct tls *connect(const char *);
+-static int get_problem_info(struct problem_info *, struct tls *, const char *,
+-	const char *, const char *, const char *);
+ static int get_problem_runs(struct problem_run *, unsigned int, struct tls *,
+ 	const char *, const char *, const char *, const char *);
+ static const char *problem_status_to_str(const enum problem_status);
+@@ -136,49 +130,6 @@ connect(const char *host)
+ 	return ctx;
+ }
+ 
+-int
+-get_problem_info(struct problem_info *pi, struct tls *ctx, const char *host,
+-	const char *sid, const char *ejsid, const char *problem)
+-{
+-	static const char rt[] = GET_REQUEST_TEMPLATE(
+-		"action=problem-status-json&problem=%s");
+-
+-	char buf[BUF_SIZE], msg[MESSAGE_LENGHT];
+-	size_t l;
+-	int ok;
+-
+-	l = sprintf(buf, rt, sid, ejsid, problem, host);
+-	if (l > sizeof(buf))
+-		return 1;
+-	if (tls_safe_write(ctx, buf, l) == -1)
+-		return 1;
+-
+-	l = tls_safe_read(ctx, buf, sizeof(buf) - 1);
+-	if (l == -1)
+-		return 1;
+-	buf[l] = 0;
+-
+-	if (unparse_json_field(buf, "ok", BOOL, &ok))
+-		return 1;
+-	if (ok == 0) {
+-		if (unparse_json_field(buf, "message", STRING, &msg))
+-			return 1;
+-		fprintf(stderr, "ejudge error: %s\n", msg);
+-		return 1;
+-	}
+-	/* NOTE: Unparse array as INT maybe not stable, and get only first num. */
+-	if (unparse_json_field(buf, "compilers", UINT, &pi->lang_id))
+-		return 1;
+-
+-	while (l + 1 == BUF_SIZE && l != 0) {
+-		l = tls_safe_read(ctx, buf, BUF_SIZE);
+-		if (l == -1)
+-			return -1;
+-	}
+-
+-	return 0;
+-}
+-
+ int
+ get_problem_runs(struct problem_run *runs, unsigned int n, struct tls *ctx,
+ 	const char *host, const char *sid, const char *ejsid, const char *problem)
+@@ -364,7 +315,7 @@ print_status_run(const char *host, const char *login, const char *password,
+ 
+ int
+ submit_run(const char *host, const char *login, const char *password,
+-	const char *path, char *header)
++	const char *path, char *header, unsigned int lang_id)
+ {
+ 	static const char 
+ 		ct[] = "multipart/form-data; boundary=" BOUNDARY,
+@@ -380,7 +331,6 @@ submit_run(const char *host, const char *login, const char *password,
+ 
+ 	char buf[BUF_SIZE], msg[MESSAGE_LENGHT], sid[SID_LENGHT], ejsid[SID_LENGHT],
+ 		*contest_id, *prob_id;
+-	struct problem_info pi;
+ 	struct stat s;
+ 	struct tls *ctx;
+ 	ssize_t l;
+@@ -395,15 +345,11 @@ submit_run(const char *host, const char *login, const char *password,
+ 	if (auth(ctx, host, login, password, contest_id, sid, ejsid))
+ 		goto failure;
+ 
+-	if (get_problem_info(&pi, ctx, host, sid, ejsid, prob_id)) {
+-		goto failure;
+-	}
+-
+ 	if (stat(path, &s) == -1)
+ 		goto failure;
+ 
+ 	l = make_post_request(buf, URI, host, ct, s.st_size + sizeof(eb), dt, sid,
+-		ejsid, prob_id, pi.lang_id);
++		ejsid, prob_id, lang_id);
+ 
+ 	buf[l] = 0;
+ 
+diff --git a/src/networking.h b/src/networking.h
+index 557983a..f35491c 100644
+--- a/src/networking.h
++++ b/src/networking.h
+@@ -6,4 +6,5 @@ static const char header_pattern[] =
+ 	"[[:punct:]]{,3}[[:blank:]]*([0-9]+)-([0-9]+)";
+ 
+ void print_status_run(const char *, const char *, const char *, char *);
+-int submit_run(const char *, const char *, const char *, const char *, char *);
++int submit_run(const char *, const char *, const char *, const char *, char *, 
++			   unsigned int);
+-- 
+2.47.2
+
