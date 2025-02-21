@@ -366,31 +366,15 @@ int
 submit_run(const char *host, const char *login, const char *password,
 	const char *path, char *header)
 {
-	static const char
-		ct[] = "multipart/form-data; boundary=-------------573cf973d5228",
-		dt[] = "---------------573cf973d5228\r\n"
-			   "Content-Disposition: form-data; name=\"action\"\r\n\r\n"
-			   "submit-run\r\n"
-			   "---------------573cf973d5228\r\n"
-			   "Content-Disposition: form-data; name=\"json\"\r\n\r\n"
-			   "1\r\n"
-			   "---------------573cf973d5228\r\n"
-			   "Content-Disposition: form-data; name=\"SID\"\r\n\r\n"
-			   "%s\r\n"
-			   "---------------573cf973d5228\r\n"
-			   "Content-Disposition: form-data; name=\"EJSID\"\r\n\r\n"
-			   "%s\r\n"
-			   "---------------573cf973d5228\r\n"
-			   "Content-Disposition: form-data; name=\"prob_id\"\r\n\r\n"
-			   "%s\r\n"
-			   "---------------573cf973d5228\r\n"
-			   "Content-Disposition: form-data; name=\"lang_id\"\r\n\r\n"
-			   "%u\r\n"
-			   "---------------573cf973d5228\r\n"
-			   "Content-Disposition: form-data; name=\"file\"\r\n"
-			   "Content-Type: text/plain; \r\n"
-			   "\r\n",
-		eb[] = "\r\n---------------573cf973d5228--\r\n";
+	static const char ct[] = "multipart/form-data; boundary=" BOUNDARY,
+					  dt[] = BODY_PART_TEMPLATE("action", "submit-run\r\n") 
+						     BODY_PART_TEMPLATE("json", "1\r\n")
+						     BODY_PART_TEMPLATE("SID", "%s\r\n")
+							 BODY_PART_TEMPLATE("EJSID", "%s\r\n")
+							 BODY_PART_TEMPLATE("prob_id", "%s\r\n")
+							 BODY_PART_TEMPLATE("lang_id", "%u\r\n")
+							 BODY_PART_TEMPLATE("file", ""),
+					  eb[] = "\r\n--" BOUNDARY "--\r\n";
 
 	char buf[BUF_SIZE], msg[MESSAGE_LENGHT], sid[SID_LENGHT], ejsid[SID_LENGHT],
 		*contest_id, *prob_id;
@@ -398,7 +382,7 @@ submit_run(const char *host, const char *login, const char *password,
 	struct stat s;
 	struct tls *ctx;
 	ssize_t l;
-	int fd, ok;
+	int fd, ok, rid;
 
 	if (unpack_header(header, &contest_id, &prob_id))
 		return 1;
@@ -409,12 +393,9 @@ submit_run(const char *host, const char *login, const char *password,
 	if (auth(ctx, host, login, password, contest_id, sid, ejsid))
 		goto failure;
 
-	printf("Con1\n");
-	fflush(stdout);
-	// if (get_problem_info(&pi, ctx, host, sid, ejsid, prob_id)) {
-	// 	goto failure;
-	// }
-	pi.lang_id = 3;
+	if (get_problem_info(&pi, ctx, host, sid, ejsid, prob_id)) {
+		goto failure;
+	}
 
 	if (stat(path, &s) == -1)
 		goto failure;
@@ -423,8 +404,6 @@ submit_run(const char *host, const char *login, const char *password,
 		ejsid, prob_id, pi.lang_id);
 
 	buf[l] = 0;
-	printf("%ld %s\n", l, buf);
-	fflush(stdout);
 
 	if (l > sizeof(buf) || l == -1) {
 		fprintf(stderr, "make_post_request error: Lenght %ld", l);
@@ -444,10 +423,8 @@ submit_run(const char *host, const char *login, const char *password,
 			close(fd);
 			goto failure;
 		}
-		write(STDIN_FILENO, buf, l);
 	}
 	tls_safe_write(ctx, eb, sizeof(eb));
-	puts(eb);
 	close(fd);
 
 	l = tls_safe_read(ctx, buf, sizeof(buf) - 1);
@@ -465,7 +442,9 @@ submit_run(const char *host, const char *login, const char *password,
 	}
 
 	/* TODO: Unwrap request. */
-	puts(buf);
+	if (unparse_json_field(buf, "run_id", INT, &rid))
+		goto failure;
+	printf("Succesful submission.\nRun id: %d.\n", rid);
 
 	tls_close(ctx);
 	tls_free(ctx);

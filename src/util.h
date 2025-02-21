@@ -3,7 +3,12 @@
  */
 #include <stdio.h>
 
-/* TODO: Refactor. */
+#define BOUNDARY "--CstiBoundaryR23cA9G3dD229"
+
+#define BODY_PART_TEMPLATE(name, value) \
+	"--" BOUNDARY "\r\n"                \
+	"Content-Disposition: form-data; name=\"" name "\"\r\n\r\n" value
+
 #define GET_REQUEST_TEMPLATE(args)                                         \
 	"GET /cgi-bin/new-client?json=1&SID=%s&EJSID=%s&" args " HTTP/1.1\r\n" \
 	"Host: %s\r\n"                                                         \
