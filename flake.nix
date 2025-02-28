@@ -25,13 +25,15 @@
         {
           devShells = {
             default = pkgs.mkShell {
-              packages = with pkgs; [
-                gnumake
-                libressl
-              ] 
-							++ lib.optionals pkgs.stdenv.isLinux [
-								gdb
-							];
+              packages =
+                with pkgs;
+                [
+                  gnumake
+                  libressl
+                ]
+                ++ lib.optionals pkgs.stdenv.isLinux [
+                  gdb
+                ];
             };
           };
 
