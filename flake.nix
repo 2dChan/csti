@@ -21,15 +21,17 @@
         "x86_64-darwin"
       ];
       perSystem =
-        { pkgs, ... }:
+        { pkgs, lib, ... }:
         {
           devShells = {
             default = pkgs.mkShell {
               packages = with pkgs; [
-                gdb
                 gnumake
                 libressl
-              ];
+              ] 
+							++ lib.optionals pkgs.stdenv.isLinux [
+								gdb
+							];
             };
           };
 
