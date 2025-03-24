@@ -82,6 +82,7 @@ get_file_header(const char *path)
 	}
 
 	if (fgets(h, HEADER_SIZE, f) == NULL) {
+		free(h);
 		perror("fgets");
 		return NULL;
 	}
