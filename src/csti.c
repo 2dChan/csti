@@ -77,11 +77,13 @@ get_file_header(const char *path)
 
 	h = malloc(HEADER_SIZE);
 	if (h == NULL) {
+		fclose(f);
 		perror("malloc");
 		return NULL;
 	}
 
 	if (fgets(h, HEADER_SIZE, f) == NULL) {
+		fclose(f);
 		free(h);
 		perror("fgets");
 		return NULL;
