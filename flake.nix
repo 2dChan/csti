@@ -24,7 +24,7 @@
         { pkgs, lib, ... }:
         {
           devShells = {
-            default = pkgs.mkShell {
+            csti = pkgs.mkShell {
               packages =
                 with pkgs;
                 [

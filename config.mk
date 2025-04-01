@@ -9,7 +9,7 @@ BUILD_DIR = build
 LIBS     = -ltls
 
 # flags
-CPPFLAGS = -D_DEFAULT_SOURCE -D_BSD_SOURCE -D_XOPEN_SOURCE=700L -DVERSION=\"${VERSION}\"
+CPPFLAGS = -D_DEFAULT_SOURCE -D_BSD_SOURCE -DVERSION=\"${VERSION}\"
 # CFLAGS   = -g -std=c99 -pedantic -Wall -O3 -march=native ${CPPFLAGS}
 CFLAGS   = -std=c99 -pedantic -Wall -O3 -march=native ${CPPFLAGS}
 LDFLAGS  = ${LIBS}
